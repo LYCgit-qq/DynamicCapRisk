@@ -1,0 +1,209 @@
+# 特征配置文件（对应论文第3章）
+
+# 候选特征（共18项）
+candidate_features:
+  # 操纵行为特征（4项）
+  manipulation:
+    - name: "steering_angle"
+      symbol: "X1"
+      description: "方向盘转角"
+      unit: "degree"
+      source: "driving_simulator"
+      
+    - name: "steering_angular_velocity"
+      symbol: "X2"
+      description: "方向盘转角角速度"
+      unit: "degree/s"
+      source: "driving_simulator"
+      
+    - name: "accelerator_pedal"
+      symbol: "X3"
+      description: "加速踏板开度"
+      unit: "percent"
+      source: "driving_simulator"
+      excluded: true  # 与纵向加速度相关性r=0.73，剔除
+      
+    - name: "brake_pedal"
+      symbol: "X4"
+      description: "制动踏板开度"
+      unit: "percent"
+      source: "driving_simulator"
+  
+  # 车辆响应特征（6项）
+  vehicle_response:
+    - name: "speed"
+      symbol: "X5"
+      description: "车速"
+      unit: "m/s"
+      source: "driving_simulator"
+      excluded: true  # 与跟车距离、碰撞时间高度相关r>0.85
+      
+    - name: "longitudinal_acceleration"
+      symbol: "X6"
+      description: "纵向加速度"
+      unit: "m/s²"
+      source: "driving_simulator"
+      
+    - name: "lateral_offset"
+      symbol: "X7"
+      description: "横向偏移量"
+      unit: "m"
+      source: "driving_simulator"
+      
+    - name: "lateral_acceleration"
+      symbol: "X8"
+      description: "横向加速度"
+      unit: "m/s²"
+      source: "driving_simulator"
+      
+    - name: "following_distance"
+      symbol: "X9"
+      description: "跟车距离"
+      unit: "m"
+      source: "driving_simulator"
+      excluded: true  # 与车速、碰撞时间高度相关r>0.85
+      
+    - name: "time_to_collision"
+      symbol: "X10"
+      description: "碰撞时间(TTC)"
+      unit: "s"
+      source: "driving_simulator"
+  
+  # 眼动认知特征（5项）
+  eye_tracking:
+    - name: "gaze_x"
+      symbol: "X11"
+      description: "注视点X坐标"
+      unit: "pixel"
+      source: "eye_tracker"
+      excluded: true  # VIF=12.3，多重共线性
+      
+    - name: "gaze_y"
+      symbol: "X12"
+      description: "注视点Y坐标"
+      unit: "pixel"
+      source: "eye_tracker"
+      excluded: true  # VIF=11.8，多重共线性
+      
+    - name: "blink_frequency"
+      symbol: "X13"
+      description: "眨眼频率"
+      unit: "times/min"
+      source: "eye_tracker"
+      excluded: true  # 经VIF检验后剔除
+      
+    - name: "pupil_diameter"
+      symbol: "X14"
+      description: "瞳孔直径"
+      unit: "mm"
+      source: "eye_tracker"
+      
+    - name: "gaze_dispersion"
+      symbol: "X15"
+      description: "注视点分散度"
+      unit: "normalized"
+      source: "eye_tracker"
+  
+  # 生理状态特征（3项）
+  physiological:
+    - name: "heart_rate_mean"
+      symbol: "X16"
+      description: "心率均值"
+      unit: "bpm"
+      source: "physio_lab"
+      excluded: true  # 经VIF检验后剔除
+      
+    - name: "heart_rate_variability"
+      symbol: "X17"
+      description: "心率变异性(HRV)"
+      unit: "ms"
+      source: "physio_lab"
+      
+    - name: "skin_conductance_level"
+      symbol: "X18"
+      description: "皮肤电导水平(SCL)"
+      unit: "μS"
+      source: "physio_lab"
+
+# 最终选定特征（11项，经相关性分析和VIF检验筛选）
+selected_features:
+  manipulation: ["X1", "X2", "X4"]  # 3项
+  vehicle_response: ["X6", "X7", "X8", "X10"]  # 4项
+  eye_tracking: ["X14", "X15"]  # 2项
+  physiological: ["X17", "X18"]  # 2项
+
+# 特征筛选标准
+feature_selection:
+  # Pearson相关性分析
+  correlation:
+    threshold_significant: 0.5  # 显著相关阈值r∈[0.5, 0.8]
+    threshold_high: 0.8  # 高度相关阈值r>0.8，需剔除
+  
+  # VIF多重共线性检验
+  vif:
+    threshold: 10  # VIF<10为不存在严重多重共线性
+
+# 特征权重（AHP-熵权组合赋权法）
+feature_weights:
+  # AHP主观权重
+  ahp:
+    manipulation:
+      X1: 0.252  # 方向盘转角
+      X2: 0.139  # 转角角速度
+      X4: 0.076  # 制动踏板
+    vehicle_response:
+      X6: 0.086  # 纵向加速度
+      X7: 0.111  # 横向偏移量
+      X8: 0.059  # 横向加速度
+      X10: 0.044  # 碰撞时间
+    eye_tracking:
+      X14: 0.100  # 瞳孔直径
+      X15: 0.050  # 注视点分散度
+    physiological:
+      X17: 0.050  # 心率变异性
+      X18: 0.033  # 皮电水平
+  
+  # 熵权客观权重
+  entropy:
+    manipulation:
+      X1: 0.089
+      X2: 0.076
+      X4: 0.115
+    vehicle_response:
+      X6: 0.170
+      X7: 0.193
+      X8: 0.092
+      X10: 0.141
+    eye_tracking:
+      X14: 0.102
+      X15: 0.068
+    physiological:
+      X17: 0.083
+      X18: 0.072
+  
+  # 组合权重（最终使用）
+  combined:
+    manipulation:
+      X1: 0.127  # 方向盘转角
+      X2: 0.098  # 转角角速度
+      X4: 0.079  # 制动踏板
+    vehicle_response:
+      X6: 0.110  # 纵向加速度
+      X7: 0.174  # 横向偏移量（最高）
+      X8: 0.064  # 横向加速度
+      X10: 0.128  # 碰撞时间
+    eye_tracking:
+      X14: 0.102  # 瞳孔直径
+      X15: 0.058  # 注视点分散度
+    physiological:
+      X17: 0.042  # 心率变异性
+      X18: 0.018  # 皮电水平
+
+# 能力波动量计算参数
+capability_fluctuation:
+  # 综合得分缩放系数
+  scaling_factor: 0.4  # k=0.4（经敏感性分析确定）
+  offset: -0.2
+  
+  # 公式：A_fl = 0.4 * S_fl - 0.2
+  # 值域：[-0.2, 0.2]
