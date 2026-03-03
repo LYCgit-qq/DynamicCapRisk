@@ -22,10 +22,9 @@ import logging
 from pathlib import Path
 from typing import Dict, Any
 
-import numpy as np
 import pandas as pd
 
-from read_questionnaire import load_questionnaire
+from questionnaire_loader import load_questionnaire
 
 # 项目根目录（假设本文件在 src/1_data_processing 中）
 BASE_DIR = Path(__file__).resolve().parents[2]
