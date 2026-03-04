@@ -1,9 +1,12 @@
 # D:\Local\DynamicCapRisk\src\2_capability_assessment\baseline_capability.py
 
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
 import argparse
 import logging
+import yaml
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Dict, Any
 
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -22,36 +25,60 @@ from src.visualization.plot_capability import (
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 # ---------------------------------------------------------------------------
-# 核心配置（与论文一致）
+# 配置读取工具函数
 # ---------------------------------------------------------------------------
-CLUSTER_RANGE = range(2, 8)  # 聚类数目k从2到7
-BEST_K = 3  # 论文确定的最佳聚类数
-MAX_ITER = 100  # 最大迭代次数
-TOL = 0.01  # 收敛阈值
-RANDOM_STATE = 42  # 随机种子（保证可复现）
+def load_yaml_config(config_path: str | Path) -> Dict[str, Any]:
+    """加载YAML配置文件"""
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"配置文件不存在: {config_path.resolve()}")
+    
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    
+    # 处理聚类范围（将列表转为range对象）
+    if "cluster_range" in config and isinstance(config["cluster_range"], list):
+        cluster_start, cluster_end = config["cluster_range"]
+        config["cluster_range"] = range(cluster_start, cluster_end)
+    
+    # 路径转为绝对路径（基于项目根目录）
+    for path_key in ["input_path", "output_path"]:
+        if path_key in config:
+            config[path_key] = BASE_DIR / config[path_key]
+    
+    return config
 
-# 论文中提取的6项核心指标（用于结果展示）
-KEY_INDICATORS = [
-    "驾龄",
-    "每周开车频率",  # 驾驶经验
-    "限速遵守度",
-    "换道观察充分性",  # 行为规范
-    "情绪稳定性",
-    "施工区安全感",  # 心理状态
-]
-
+def merge_configs(default_config: Dict[str, Any], cli_args: argparse.Namespace) -> Dict[str, Any]:
+    """合并默认配置（YAML）和命令行参数，命令行参数优先级更高"""
+    merged = default_config.copy()
+    
+    # 覆盖路径参数
+    if cli_args.input is not None:
+        merged["input_path"] = Path(cli_args.input)
+    if cli_args.output is not None:
+        merged["output_path"] = Path(cli_args.output)
+    
+    # 覆盖聚类核心参数（按需添加）
+    if cli_args.best_k is not None:
+        merged["best_k"] = cli_args.best_k
+    if cli_args.max_iter is not None:
+        merged["max_iter"] = cli_args.max_iter
+    if cli_args.random_state is not None:
+        merged["random_state"] = cli_args.random_state
+    
+    return merged
 
 # ---------------------------------------------------------------------------
-# 辅助函数
+# 核心功能函数（仅参数来源修改，逻辑不变）
 # ---------------------------------------------------------------------------
-def evaluate_clustering(X: pd.DataFrame, k: int) -> Tuple[float, float, float]:
+def evaluate_clustering(X: pd.DataFrame, k: int, config: Dict[str, Any]) -> Tuple[float, float, float]:
     """计算单个k值下的三个聚类评价指标。"""
     kmeans = KMeans(
         n_clusters=k,
         init="k-means++",
-        max_iter=MAX_ITER,
-        tol=TOL,
-        random_state=RANDOM_STATE,
+        max_iter=config["max_iter"],
+        tol=config["tol"],
+        random_state=config["random_state"],
     )
     labels = kmeans.fit_predict(X)
     sc = silhouette_score(X, labels)
@@ -59,12 +86,11 @@ def evaluate_clustering(X: pd.DataFrame, k: int) -> Tuple[float, float, float]:
     dbi = davies_bouldin_score(X, labels)
     return sc, ch, dbi
 
-
-def find_best_k(X: pd.DataFrame, output_dir: Path) -> int:
-    """遍历k=2-6，计算评价指标并确定最佳k（与论文表3.3一致）。"""
+def find_best_k(X: pd.DataFrame, output_dir: Path, config: Dict[str, Any]) -> Tuple[int, pd.DataFrame]:
+    """遍历k范围，计算评价指标并确定最佳k"""
     results = []
-    for k in CLUSTER_RANGE:
-        sc, ch, dbi = evaluate_clustering(X, k)
+    for k in config["cluster_range"]:
+        sc, ch, dbi = evaluate_clustering(X, k, config)
         results.append({"k": k, "轮廓系数SC": sc, "CH指数": ch, "DBI指数": dbi})
 
     # 保存并打印评价指标表
@@ -76,35 +102,30 @@ def find_best_k(X: pd.DataFrame, output_dir: Path) -> int:
     logging.info(eval_df.round(2).to_string())
     logging.info("=" * 60)
 
-    # 按论文逻辑选择最佳k：SC最大、CH最大、DBI最小
-    # 这里直接返回论文确定的3，也可根据实际数据自动选择
-    return BEST_K, eval_df
-
+    # 返回论文指定的最佳k（或可改为自动选择）
+    return config["best_k"], eval_df
 
 def cluster_analysis(
-    X: pd.DataFrame, k: int
+    X: pd.DataFrame, k: int, config: Dict[str, Any]
 ) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
-    """执行K-means++聚类并返回核心结果（修正命名颠倒问题）。"""
+    """执行K-means++聚类并返回核心结果"""
     kmeans = KMeans(
         n_clusters=k,
         init="k-means++",
-        max_iter=MAX_ITER,
-        tol=TOL,
-        random_state=RANDOM_STATE,
+        max_iter=config["max_iter"],
+        tol=config["tol"],
+        random_state=config["random_state"],
     )
     labels = kmeans.fit_predict(X)
     centers = pd.DataFrame(kmeans.cluster_centers_, columns=X.columns)
 
-    # 按6项核心指标综合得分排序
+    # 按核心指标综合得分排序
     cluster_means = X.groupby(labels).mean()
-    sort_score = cluster_means[KEY_INDICATORS].mean(axis=1)  # 6项核心指标综合得分
-    cluster_order = sort_score.sort_values(
-        ascending=False
-    ).index.tolist()  # 0:高, 1:中, 2:低
+    sort_score = cluster_means[config["key_indicators"]].mean(axis=1)
+    cluster_order = sort_score.sort_values(ascending=False).index.tolist()
 
-    # -------------------------- 动态标签生成（适配任意k） --------------------------
+    # 动态标签生成
     def _get_dynamic_cluster_names(k: int) -> list:
-        """根据k值动态生成聚类名称（优先使用语义化名称，超过4类则用通用名）"""
         if k == 2:
             return ["高能力组", "低能力组"]
         elif k == 3:
@@ -112,7 +133,6 @@ def cluster_analysis(
         elif k == 4:
             return ["高能力组", "中高能力组", "中低能力组", "低能力组"]
         else:
-            # k > 4 时使用通用命名
             names = [f"能力组_{i+1}" for i in range(k)]
             names[0] += "（高）"
             names[-1] += "（低）"
@@ -129,23 +149,17 @@ def cluster_analysis(
     # 按得分排序并更新聚类中心索引
     centers = centers.reindex(cluster_order)
     centers.index = cluster_names
-    # -----------------------------------------------------------------------------
-
-    # 【新增】添加6项核心指标综合得分（便于验证结果）
-    centers["综合得分"] = centers[KEY_INDICATORS].mean(axis=1)
+    centers["综合得分"] = centers[config["key_indicators"]].mean(axis=1)
 
     return centers, labels_renamed, kmeans
 
-
-def quantify_benchmark_ability(centers: pd.DataFrame) -> pd.DataFrame:
-    """根据论文步骤计算基准能力量化值（表3.5）。"""
-    # 步骤1：对35项指标的聚类中心进行Min-Max归一化到[0,1]
-    centers_normalized = (centers - centers.min().min()) / (
-        centers.max().max() - centers.min().min()
-    )
+def quantify_benchmark_ability(centers: pd.DataFrame, config: Dict[str, Any]) -> pd.DataFrame:
+    """根据论文步骤计算基准能力量化值"""
+    # 步骤1：Min-Max归一化
+    centers_normalized = (centers - centers.min().min()) / (centers.max().max() - centers.min().min())
 
     # 步骤2：等权求和计算综合得分S^c
-    composite_score = centers_normalized.mean(axis=1)  # 35项指标等权平均
+    composite_score = centers_normalized.mean(axis=1)
 
     # 步骤3：线性映射到[0.55, 0.95]
     benchmark_ability = 0.55 + 0.4 * composite_score
@@ -156,33 +170,29 @@ def quantify_benchmark_ability(centers: pd.DataFrame) -> pd.DataFrame:
     )
     return result_df
 
-
 # ---------------------------------------------------------------------------
-# 主流程
+# 主流程函数
 # ---------------------------------------------------------------------------
-def evaluate_benchmark_driving_ability(
-    standardized_data_path: Path | str, output_dir: Path | str
-):
-    """执行完整的基准驾驶能力评估流程。"""
-    out = Path(output_dir)
+def evaluate_benchmark_driving_ability(config: Dict[str, Any]):
+    """执行完整的基准驾驶能力评估流程"""
+    out = config["output_path"]
     out.mkdir(parents=True, exist_ok=True)
 
     # 1. 加载标准化数据
     logging.info("正在加载标准化数据...")
-    X = pd.read_pickle(standardized_data_path)
+    X = pd.read_pickle(config["input_path"])
     logging.info("数据加载完成，形状: %s", X.shape)
 
     # 2. 确定最佳聚类数目
-    best_k, eval_df = find_best_k(X, out)
+    best_k, eval_df = find_best_k(X, out, config)
     logging.info("最佳聚类数目确定为: k=%d", best_k)
 
     # 3. 执行K-means++聚类
     logging.info("正在执行K-means++聚类...")
-    centers, labels, kmeans = cluster_analysis(X, best_k)
+    centers, labels, kmeans = cluster_analysis(X, best_k, config)
     logging.info("聚类完成，迭代次数: %d", kmeans.n_iter_)
 
     # 4. 聚类结果统计
-    # 动态获取排序后的聚类名称（直接从聚类中心索引获取，保证顺序一致）
     sorted_cluster_names = centers.index.tolist()
     cluster_stats = pd.DataFrame(
         {
@@ -192,26 +202,22 @@ def evaluate_benchmark_driving_ability(
     ).reindex(sorted_cluster_names)
     cluster_stats["占比"] = cluster_stats["占比"].astype(str) + "%"
 
-    # 5. 核心指标聚类中心（表3.4）
-    key_centers = centers[KEY_INDICATORS + ["综合得分"]].round(2)  # 新增综合得分列
+    # 5. 核心指标聚类中心
+    key_centers = centers[config["key_indicators"] + ["综合得分"]].round(2)
     key_centers = pd.concat([key_centers, cluster_stats], axis=1)
 
-    # 6. 基准能力量化（表3.5）
-    benchmark_result = quantify_benchmark_ability(
-        centers.drop("综合得分", axis=1)
-    )  # 排除新增的综合得分列
+    # 6. 基准能力量化
+    benchmark_result = quantify_benchmark_ability(centers.drop("综合得分", axis=1), config)
     benchmark_result = pd.concat([cluster_stats, benchmark_result.round(2)], axis=1)
 
     # 7. 保存结果
     labels.to_csv(out / "Ab_cluster_labels.csv", encoding="utf-8-sig", header=["能力等级"])
     centers.to_csv(out / "Ab_cluster_centers_all_indicators.csv", encoding="utf-8-sig")
     key_centers.to_csv(out / "Ab_cluster_key_centers.csv", encoding="utf-8-sig")
-    benchmark_result.to_csv(
-        out / "Ab_quantification.csv", encoding="utf-8-sig"
-    )
+    benchmark_result.to_csv(out / "Ab_quantification.csv", encoding="utf-8-sig")
 
     # 8. PCA可视化
-    plot_cluster_metrics(eval_df, out, best_k=BEST_K)
+    plot_cluster_metrics(eval_df, out, best_k=config["best_k"])
     plot_pca_visualization(X, labels, out)
     plot_pca_3d_visualization(X, labels, out)
 
@@ -226,36 +232,66 @@ def evaluate_benchmark_driving_ability(
 
     return labels, centers, benchmark_result
 
-
+# ---------------------------------------------------------------------------
+# 命令行参数解析 & 主函数
+# ---------------------------------------------------------------------------
 def main():
+    # 1. 定义命令行参数
     parser = argparse.ArgumentParser(
         description="基准驾驶能力评估",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    # 配置文件参数
     parser.add_argument(
-        "-i",
-        "--input",
-        default=BASE_DIR / "data" / "processed" / "questionnaire_standardized.pkl",
-        help="标准化问卷数据路径（PKL格式）",
+        "-c", "--config",
+        default=BASE_DIR / "config" / "baseline_capability.yaml",
+        help="YAML配置文件路径"
+    )
+    # 路径参数（可覆盖YAML）
+    parser.add_argument(
+        "-i", "--input",
+        help="标准化问卷数据路径（PKL格式，覆盖YAML配置）"
     )
     parser.add_argument(
-        "-o",
-        "--output",
-        default=BASE_DIR / "output" / "1_capability_assessment",
-        help="输出目录",
+        "-o", "--output",
+        help="输出目录（覆盖YAML配置）"
     )
+    # 核心参数（可覆盖YAML）
+    parser.add_argument(
+        "--best_k", type=int,
+        help="最佳聚类数（覆盖YAML配置）"
+    )
+    parser.add_argument(
+        "--max_iter", type=int,
+        help="KMeans最大迭代次数（覆盖YAML配置）"
+    )
+    parser.add_argument(
+        "--random_state", type=int,
+        help="随机种子（覆盖YAML配置）"
+    )
+
     args = parser.parse_args()
 
+    # 2. 配置初始化
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
-
     try:
-        evaluate_benchmark_driving_ability(args.input, args.output)
+        # 加载YAML配置
+        default_config = load_yaml_config(args.config)
+        # 合并配置（命令行参数优先级更高）
+        final_config = merge_configs(default_config, args)
+        logging.info("配置加载完成，使用的核心参数：")
+        logging.info(f"  聚类范围: {final_config['cluster_range']}")
+        logging.info(f"  最佳k值: {final_config['best_k']}")
+        logging.info(f"  输入路径: {final_config['input_path']}")
+        logging.info(f"  输出路径: {final_config['output_path']}")
+
+        # 3. 执行评估流程
+        evaluate_benchmark_driving_ability(final_config)
     except Exception as exc:
         logging.error("评估失败：%s", exc, exc_info=True)
         return
-
 
 if __name__ == "__main__":
     main()

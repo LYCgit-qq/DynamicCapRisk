@@ -424,11 +424,168 @@ def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
     plt.close()
 
 
-# ====================== 3. 不同基准能力组波动量箱线图（修复警告+优化） ======================
-def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
+# ====================== 3. 不同基准能力组波动量箱线图 ======================
+def plot_grouped_boxplot(fluctuation_sample, config, save_path=None):
+    """
+    绘制真实能力等级箱线图（消除所有FutureWarning）
+    """
+    # ====================== 1. 基础检查 ======================
+    if len(fluctuation_sample) != 67:
+        raise ValueError(
+            f"fluctuation_sample长度必须为67，当前为{len(fluctuation_sample)}"
+        )
+
+    required_config_keys = ["subject_exp_map_csv", "ability_label_csv"]
+    if not all(k in config for k in required_config_keys):
+        raise KeyError(f"config必须包含：{required_config_keys}")
+
+    for csv_key in required_config_keys:
+        csv_path = config[csv_key]
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"CSV文件不存在：{csv_path}")
+
+    # ====================== 2. 加载映射关系 ======================
+    map_df = pd.read_csv(config["subject_exp_map_csv"])
+    map_df["实验ID"] = map_df["实验ID"].astype(int)
+
+    label_df = pd.read_csv(config["ability_label_csv"])
+    label_df.rename(columns={label_df.columns[0]: "被试ID"}, inplace=True)
+    label_df["被试ID"] = label_df["被试ID"].astype(int)
+    label_df["能力等级"] = label_df["能力等级"].astype(str)  # 强制字符串
+
+    # 合并映射（仅保留高/中/低）
+    merge_df = pd.merge(map_df, label_df, on="被试ID", how="left")
+    merge_df = merge_df[merge_df["能力等级"].isin(["高能力组", "中能力组", "低能力组"])]
+    merge_df["能力等级"] = merge_df["能力等级"].fillna("低能力组")
+    expid_to_grade = dict(zip(merge_df["实验ID"], merge_df["能力等级"]))
+
+    # ====================== 3. 收集波动量数据 ======================
+    grade_flucts = {"高能力组": [], "中能力组": [], "低能力组": []}
+
+    for exp_id in range(67):
+        if exp_id not in expid_to_grade:
+            continue
+        grade = expid_to_grade[exp_id]
+
+        fluct_arr = fluctuation_sample[exp_id]
+        if not isinstance(fluct_arr, (np.ndarray, list)) or len(fluct_arr) == 0:
+            continue
+
+        try:
+            fluct_arr = np.array(fluct_arr, dtype=np.float64)
+            fluct_arr = fluct_arr[np.isfinite(fluct_arr)]
+        except:
+            continue
+
+        if len(fluct_arr) > 0:
+            grade_flucts[grade].extend(fluct_arr.tolist())
+
+    # 过滤空分组
+    grade_flucts = {k: v for k, v in grade_flucts.items() if len(v) > 0}
+    if len(grade_flucts) == 0:
+        print("无有效波动量数据可绘制")
+        return
+
+    print("最终有效分组数据量：")
+    for grade, vals in grade_flucts.items():
+        print(f"  {grade}: {len(vals)}个值")
+
+    # ====================== 4. 绘制箱线图（修复seaborn警告） ======================
+    set_paper_style()
+
+    # 准备绘图数据
+    plot_data = []
+    for grade, fluct_vals in grade_flucts.items():
+        for val in fluct_vals:
+            plot_data.append({"驾驶能力波动量 Afl": val, "真实能力等级": grade})
+    plot_df = pd.DataFrame(plot_data)
+
+    # 动态有序分类
+    ordered_grades = []
+    for g in ["高能力组", "中能力组", "低能力组"]:
+        if g in grade_flucts and len(grade_flucts[g]) > 0:
+            ordered_grades.append(g)
+
+    plot_df["真实能力等级"] = pd.Categorical(
+        plot_df["真实能力等级"], categories=ordered_grades, ordered=True
+    )
+
+    # 创建画布
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    sns.boxplot(
+        x="真实能力等级",
+        y="驾驶能力波动量 Afl",
+        hue="真实能力等级",  # 解决palette警告
+        data=plot_df,
+        palette="viridis",
+        showfliers=False,
+        width=0.6,
+        ax=ax,
+        legend=False       # 解决palette警告
+    )
+
+    # ====================== 5. 统计标注 ======================
+    if len(ordered_grades) >= 2:
+        try:
+            group_data = [grade_flucts[g] for g in ordered_grades]
+            f_stat, p_val = stats.f_oneway(*group_data)
+            p_text = (
+                f"ANOVA: F={f_stat:.2f}, p={p_val:.3f}"
+                if p_val >= 0.001
+                else f"ANOVA: F={f_stat:.2f}, p<0.001"
+            )
+            ax.text(
+                0.5,
+                0.95,
+                p_text,
+                transform=ax.transAxes,
+                ha="center",
+                va="top",
+                bbox=dict(facecolor="white", alpha=0.8),
+                fontsize=10,
+            )
+        except Exception as e:
+            print(f"ANOVA统计失败: {e}")
+
+    # 手动计算均值（消除pandas groupby警告）
+    try:
+        grade_means = {}
+        for grade in ordered_grades:
+            vals = grade_flucts[grade]
+            if len(vals) > 0:
+                grade_means[grade] = np.mean(vals)
+
+        for i, grade in enumerate(ordered_grades):
+            if grade in grade_means and np.isfinite(grade_means[grade]):
+                ax.scatter(
+                    i, grade_means[grade], color="crimson", marker="^", s=40, zorder=10
+                )
+    except Exception as e:
+        print(f"均值标注失败: {e}（跳过）")
+
+    # ====================== 6. 美化与保存 ======================
+    ax.set_xlabel("")
+    ax.set_ylabel("驾驶能力波动量 Afl", fontsize=14)
+    ax.set_title("不同真实能力等级的驾驶能力波动量", pad=20, fontsize=16)
+    ax.tick_params(axis="x", labelsize=14)
+    sns.despine(ax=ax)
+
+    if save_path:
+        save_path = Path(save_path)
+        os.makedirs(save_path.parent, exist_ok=True)
+        plt.ioff()
+        plt.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        print(f"箱线图已保存至: {save_path}")
+    else:
+        plt.close(fig)
+
+
+def plot_grouped_boxplot_abs(fluctuation_arr, save_path=None):
     """
     绘制不同基准能力组的驾驶能力波动量箱线图（修复警告+增强鲁棒性）
-    (根据波动量绝对值分位数模拟基准能力分组：高/中/低)
+    (根据波动量绝对值分位数模拟基准能力等级：高/中/低)
 
     Args:
         fluctuation_arr: 驾驶能力波动量数组
@@ -459,7 +616,12 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
     elif n_groups == 3:
         group_labels = ["高基准能力组", "中基准能力组", "低基准能力组"]
     elif n_groups == 4:
-        group_labels = ["极高基准能力组", "高基准能力组", "低基准能力组", "极低基准能力组"]
+        group_labels = [
+            "极高基准能力组",
+            "高基准能力组",
+            "低基准能力组",
+            "极低基准能力组",
+        ]
     else:
         group_labels = [f"第{i+1}组" for i in range(n_groups)]
 
@@ -476,16 +638,14 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
     )
 
     # 构建DataFrame用于绘图
-    plot_df = pd.DataFrame(
-        {"Fluctuation": fluctuation_arr, "基准能力组别": groups}
-    )
+    plot_df = pd.DataFrame({"Fluctuation": fluctuation_arr, "基准能力等级": groups})
 
     # 2. 绘制箱线图（修复palette警告）
     fig, ax = plt.subplots(figsize=(10, 6))
     sns.boxplot(
-        x="基准能力组别",
+        x="基准能力等级",
         y="Fluctuation",
-        hue="基准能力组别",  # 添加hue参数，匹配palette
+        hue="基准能力等级",  # 添加hue参数，匹配palette
         data=plot_df,
         palette="viridis",
         showfliers=False,  # 隐藏异常值点使图更整洁
@@ -500,9 +660,7 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
         group_data = []
         valid_labels = []
         for lbl in group_labels:
-            group_vals = plot_df[plot_df["基准能力组别"] == lbl][
-                "Fluctuation"
-            ].values
+            group_vals = plot_df[plot_df["基准能力等级"] == lbl]["Fluctuation"].values
             if len(group_vals) > 0:
                 group_data.append(group_vals)
                 valid_labels.append(lbl)
@@ -531,20 +689,18 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
 
     # 4. 标注各组均值（替换为红色小三角，去掉数字）
     try:
-        means = plot_df.groupby("基准能力组别", observed=False)[
-            "Fluctuation"
-        ].mean()
+        means = plot_df.groupby("基准能力等级", observed=False)["Fluctuation"].mean()
         for i, lbl in enumerate(means.index):
             # 绘制红色小三角标记均值位置
             ax.scatter(
-                i,                  # X轴位置（对应分组）
-                means[lbl],         # Y轴位置（均值）
-                color="crimson",    # 红色
-                marker="^",         # 三角形状
-                s=40,               # 小尺寸（可根据需要调整）
-                zorder=10,          # 置于顶层，避免被遮挡
+                i,  # X轴位置（对应分组）
+                means[lbl],  # Y轴位置（均值）
+                color="crimson",  # 红色
+                marker="^",  # 三角形状
+                s=40,  # 小尺寸（可根据需要调整）
+                zorder=10,  # 置于顶层，避免被遮挡
                 edgecolors=None,
-                linewidth=0
+                linewidth=0,
             )
     except Exception as e:
         print(f"均值标注失败: {e}")
@@ -553,7 +709,7 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
     ax.set_xlabel("")
     # 调整X轴刻度文字大小为14（和Y轴标签大小一致，set_paper_style中axes.labelsize=14）
     # 若想和Y轴刻度大小一致，改为labelsize=10（set_paper_style中ytick.labelsize=10）
-    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis="x", labelsize=14)
     # 核心修改2：Y轴保留中文，标题改中文
     ax.set_ylabel("驾驶能力波动量 Afl")
     ax.set_title("不同基准能力组的驾驶能力波动量", pad=20)
@@ -566,8 +722,13 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
         print(f"分组箱线图已保存至: {save_path}")
     plt.close()
 
+
 # ====================== 主调用函数（优化路径处理） ======================
-def run_all_visualizations(result_pkl_path, output_dir="output/figs"):
+def run_all_visualizations(
+    result_pkl_path,
+    output_dir="output/figs",
+    config="config/capability_fluctuation.yaml",
+):
     """
     一键运行所有可视化（增强鲁棒性+统一路径处理）
 
@@ -597,6 +758,7 @@ def run_all_visualizations(result_pkl_path, output_dir="output/figs"):
 
     features_df = result["features"]
     fluctuation_arr = result["fluctuation"]
+    fluctuation_sample = result["sample_fluctuations"]
 
     # 统一输出目录为Path对象
     output_dir = Path(output_dir)
@@ -608,5 +770,5 @@ def run_all_visualizations(result_pkl_path, output_dir="output/figs"):
         fluctuation_arr, save_path=output_dir / "Afl_fluctuation_dist.png"
     )
     plot_grouped_boxplot(
-        fluctuation_arr, save_path=output_dir / "Afl_grouped_boxplot.png"
+        fluctuation_sample, config, save_path=output_dir / "Afl_grouped_boxplot.png"
     )

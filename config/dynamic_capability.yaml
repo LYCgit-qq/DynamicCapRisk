@@ -1,0 +1,17 @@
+# dynamic_cap_config.yaml
+base_dir: "D:/Local/DynamicCapRisk"  # 项目根目录（统一用/避免转义）
+paths:
+  ab_csv: "output/1_capability_assessment/Ab_quantification.csv"  # 基准能力CSV
+  afl_pkl: "output/1_capability_assessment/Afl_capability_fluctuation.pkl"  # 波动量PKL
+  subject_exp_csv: "data/raw/被试-实验ID映射.csv"  # 被试-实验ID映射
+  cluster_label_csv: "output/1_capability_assessment/Ab_cluster_labels.csv"  # 能力组标签
+  output_dir: "output/1_capability_assessment"  # 输出目录（按用户要求修改）
+plot:
+  font_size: 10
+  axes_label_size: 12
+  tick_label_size: 10
+  fig_size: [8, 5]  # 图表尺寸
+  dpi: 300  # 输出图片分辨率
+calculation:
+  afl_coeff: 0.4  # A_fl = 0.4*S_fl - 0.2 中的系数
+  afl_const: -0.2  # 常数项

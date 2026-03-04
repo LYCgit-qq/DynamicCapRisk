@@ -1,0 +1,20 @@
+# config/baseline_capability.yaml
+# 聚类核心参数
+cluster_range: [2, 8]        # 聚类数目k的范围（对应原CLUSTER_RANGE）
+best_k: 3                    # 论文确定的最佳聚类数
+max_iter: 100                # KMeans最大迭代次数
+tol: 0.01                    # 收敛阈值
+random_state: 42             # 随机种子（保证可复现）
+
+# 核心指标配置
+key_indicators:
+  - 驾龄
+  - 每周开车频率
+  - 限速遵守度
+  - 换道观察充分性
+  - 情绪稳定性
+  - 施工区安全感
+
+# 路径配置（默认值，可被命令行参数覆盖）
+input_path: "data/processed/questionnaire_standardized.pkl"
+output_path: "output/1_capability_assessment"

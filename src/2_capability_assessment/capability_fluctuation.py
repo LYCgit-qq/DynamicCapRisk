@@ -1,7 +1,6 @@
 # D:\Local\DynamicCapRisk\src\2_capability_assessment\capability_fluctuation.py
 
 import os
-import sys
 import yaml
 import argparse
 
@@ -516,8 +515,9 @@ def main():
     print(f"样本总数: {len(act_raw)}")
     print(f"单个样本act维度示例: {act_raw[0].shape}")
 
-    # 2. 遍历所有样本，预处理+特征提取
+    # ========== 统计每个样本的有效窗口数 ==========
     all_features = []
+    sample_window_counts = []  # 存储每个样本的有效窗口数（按原顺序）
     for i in range(len(act_raw)):
         # 单样本预处理（传入配置）
         act_win, eye_win, phy_win = preprocess_single_sample(
@@ -525,12 +525,16 @@ def main():
         )
         if act_win is None:
             print(f"跳过样本{i+1}：无有效窗口")
+            sample_window_counts.append(0)  # 无有效窗口则记0
             continue
         # 单样本特征提取
         sample_feat = extract_features_single_sample(act_win, eye_win, phy_win)
         if not sample_feat.empty:
             sample_feat["sample_id"] = i  # 标记样本ID
             all_features.append(sample_feat)
+            sample_window_counts.append(len(sample_feat))  # 记录该样本的窗口数
+        else:
+            sample_window_counts.append(0)  # 无特征则记0
 
     # 汇总所有样本的特征
     if not all_features:
@@ -539,6 +543,8 @@ def main():
     print(f"\n=== 特征提取完成 ===")
     print(f"总窗口数: {len(features_df)}")
     print(f"提取特征列表: {list(features_df.columns)}")
+    print(f"各样本窗口数: {sample_window_counts}")  # 打印验证：求和应等于总窗口数
+    print(f"窗口数求和验证: {sum(sample_window_counts)} (应等于{len(features_df)})")
 
     # 移除样本ID列（仅用于标记，不参与计算）
     if "sample_id" in features_df.columns:
@@ -576,6 +582,21 @@ def main():
     print(f"波动量均值: {A_fl.mean():.3f}")
     print(f"波动量标准差: {A_fl.std():.3f}")
 
+    # ========== 拆分波动量数组为67个样本的结果 ==========
+    sample_fluctuations = []  # 按原样本顺序存储每个样本的波动量
+    start_idx = 0
+    for win_count in sample_window_counts:
+        if win_count == 0:
+            sample_fluctuations.append(np.array([]))  # 无窗口则存空数组
+        else:
+            # 截取该样本对应的波动量区间
+            end_idx = start_idx + win_count
+            sample_fluct = A_fl[start_idx:end_idx]
+            sample_fluctuations.append(sample_fluct)
+            start_idx = end_idx
+    # 验证：拆分后总长度应等于原A_fl长度
+    assert start_idx == len(A_fl), "拆分后总长度不匹配！"
+
     # 6. 保存结果（核心pkl）
     if outdir and not os.path.isdir(outdir):
         os.makedirs(outdir, exist_ok=True)
@@ -586,6 +607,8 @@ def main():
         "fluctuation": A_fl,
         "vif": vif_result,
         "S_fl": S_fl,  # 保存中间值
+        "sample_window_counts": sample_window_counts,  # 新增：各样本窗口数
+        "sample_fluctuations": sample_fluctuations     # 新增：67个样本各自的波动量（按原顺序）
     }
     with open(output_path, "wb") as f:
         pickle.dump(result, f)
@@ -604,14 +627,12 @@ def main():
     print(f"\n论文所需CSV数据已保存至: {outdir}")
 
     # 7. 可视化（如需启用，确保plot_capability.py路径正确）
-    try:
-        run_all_visualizations(
-            result_pkl_path=output_path,
-            output_dir=config["visualization_output_dir"],
-        )
-        print("可视化完成")
-    except Exception as e:
-        print(f"可视化失败: {e}")
+    run_all_visualizations(
+        result_pkl_path=output_path,
+        output_dir=config["visualization_output_dir"],
+        config=config,
+    )
+    print("可视化完成")
 
 
 if __name__ == "__main__":

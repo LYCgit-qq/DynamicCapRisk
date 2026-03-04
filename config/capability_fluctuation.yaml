@@ -1,6 +1,8 @@
 # 路径配置
 data_path: "data/processed/raw_data.pkl"
 output_path: "output/1_capability_assessment/Afl_capability_fluctuation.pkl"
+subject_exp_map_csv: "data/raw/被试-实验ID映射.csv"  # 被试-实验ID映射文件
+ability_label_csv: "output/1_capability_assessment/Ab_cluster_labels.csv"  # 被试-能力等级标签文件
 
 # 窗口配置（单位：秒）
 window_seconds: 3
