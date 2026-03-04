@@ -108,7 +108,7 @@ def preprocess_questionnaire(
         config: 指标配置字典。
 
     Returns:
-        标准化后的 DataFrame（行=参与者，列=指标）。
+        标准化后的 DataFrame(行=参与者，列=指标）。
     """
     df = load_questionnaire(str(csv_path))
     df = df.drop(columns=[c for c in df.columns if c.startswith("Unnamed:")])
@@ -138,7 +138,7 @@ def preprocess_questionnaire(
                     stress = df.loc[[id_to_question[i] for i in ["51", "52", "53"]]].mean()
                     processed[name] = 10 - stress
             else:
-                mean_vals = sub.mean()
+                mean_vals = sub.mean()  # 三个施工区得分求平均
                 processed[name] = 10 - mean_vals if c.get("direction") == "负向" else mean_vals
 
     standardized = (processed - processed.mean()) / processed.std()
@@ -161,7 +161,7 @@ def main():
                         help="原始问卷 CSV 文件路径")
     parser.add_argument("-o", "--output", default=BASE_DIR / "data" / "processed",
                         help="输出目录")
-    args = parser.parse_args()
+    args = parser.parse_known_args()[0]
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 

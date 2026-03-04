@@ -1,3 +1,5 @@
+# D:\Local\DynamicCapRisk\src\2_capability_assessment\baseline_capability.py
+
 import argparse
 import logging
 from pathlib import Path
@@ -10,7 +12,11 @@ from sklearn.metrics import (
     calinski_harabasz_score,
     davies_bouldin_score,
 )
-from src.visualization.plot_capability import plot_pca_visualization, plot_pca_3d_visualization
+from src.visualization.plot_capability import (
+    plot_pca_visualization,
+    plot_pca_3d_visualization,
+    plot_cluster_metrics,
+)
 
 # 项目根目录
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -18,8 +24,8 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 # ---------------------------------------------------------------------------
 # 核心配置（与论文一致）
 # ---------------------------------------------------------------------------
-CLUSTER_RANGE = range(2, 7)  # 聚类数目k从2到6
-BEST_K = 3  # 论文确定的最佳聚类数
+CLUSTER_RANGE = range(2, 8)  # 聚类数目k从2到7
+BEST_K = 4  # 论文确定的最佳聚类数
 MAX_ITER = 100  # 最大迭代次数
 TOL = 0.01  # 收敛阈值
 RANDOM_STATE = 42  # 随机种子（保证可复现）
@@ -63,7 +69,7 @@ def find_best_k(X: pd.DataFrame, output_dir: Path) -> int:
 
     # 保存并打印评价指标表
     eval_df = pd.DataFrame(results).set_index("k")
-    eval_df.to_csv(output_dir / "cluster_evaluation.csv", encoding="utf-8-sig")
+    eval_df.to_csv(output_dir / "Ab_cluster_evaluation.csv", encoding="utf-8-sig")
 
     logging.info("=" * 60)
     logging.info("不同聚类数目下的评价指标（表3.3）：")
@@ -72,7 +78,7 @@ def find_best_k(X: pd.DataFrame, output_dir: Path) -> int:
 
     # 按论文逻辑选择最佳k：SC最大、CH最大、DBI最小
     # 这里直接返回论文确定的3，也可根据实际数据自动选择
-    return BEST_K
+    return BEST_K, eval_df
 
 
 def cluster_analysis(
@@ -96,23 +102,40 @@ def cluster_analysis(
         ascending=False
     ).index.tolist()  # 0:高, 1:中, 2:低
 
+    # -------------------------- 动态标签生成（适配任意k） --------------------------
+    def _get_dynamic_cluster_names(k: int) -> list:
+        """根据k值动态生成聚类名称（优先使用语义化名称，超过4类则用通用名）"""
+        if k == 2:
+            return ["高能力组", "低能力组"]
+        elif k == 3:
+            return ["高能力组", "中能力组", "低能力组"]
+        elif k == 4:
+            return ["高能力组", "中高能力组", "中低能力组", "低能力组"]
+        else:
+            # k > 4 时使用通用命名
+            names = [f"能力组_{i+1}" for i in range(k)]
+            names[0] += "（高）"
+            names[-1] += "（低）"
+            return names
+
+    cluster_names = _get_dynamic_cluster_names(k)
+
     # 重命名标签
     label_mapping = {
-        cluster_order[0]: "高能力组",
-        cluster_order[1]: "中能力组",
-        cluster_order[2]: "低能力组",
+        old_id: new_name for old_id, new_name in zip(cluster_order, cluster_names)
     }
     labels_renamed = pd.Series(labels, index=X.index).map(label_mapping)
 
-    # -------------------------- 核心修正 --------------------------
-    centers = centers.reindex(cluster_order)  # 按得分高→低排序聚类中心
-    centers.index = ["高能力组", "中能力组", "低能力组"]  # 命名与排序后的数据匹配
-    # -------------------------------------------------------------
+    # 按得分排序并更新聚类中心索引
+    centers = centers.reindex(cluster_order)
+    centers.index = cluster_names
+    # -----------------------------------------------------------------------------
 
     # 【新增】添加6项核心指标综合得分（便于验证结果）
     centers["综合得分"] = centers[KEY_INDICATORS].mean(axis=1)
 
     return centers, labels_renamed, kmeans
+
 
 def quantify_benchmark_ability(centers: pd.DataFrame) -> pd.DataFrame:
     """根据论文步骤计算基准能力量化值（表3.5）。"""
@@ -150,7 +173,7 @@ def evaluate_benchmark_driving_ability(
     logging.info("数据加载完成，形状: %s", X.shape)
 
     # 2. 确定最佳聚类数目
-    best_k = find_best_k(X, out)
+    best_k, eval_df = find_best_k(X, out)
     logging.info("最佳聚类数目确定为: k=%d", best_k)
 
     # 3. 执行K-means++聚类
@@ -159,12 +182,14 @@ def evaluate_benchmark_driving_ability(
     logging.info("聚类完成，迭代次数: %d", kmeans.n_iter_)
 
     # 4. 聚类结果统计
+    # 动态获取排序后的聚类名称（直接从聚类中心索引获取，保证顺序一致）
+    sorted_cluster_names = centers.index.tolist()
     cluster_stats = pd.DataFrame(
         {
             "样本数量": labels.value_counts(),
             "占比": labels.value_counts(normalize=True).round(3) * 100,
         }
-    ).reindex(["高能力组", "中能力组", "低能力组"])
+    ).reindex(sorted_cluster_names)
     cluster_stats["占比"] = cluster_stats["占比"].astype(str) + "%"
 
     # 5. 核心指标聚类中心（表3.4）
@@ -178,14 +203,15 @@ def evaluate_benchmark_driving_ability(
     benchmark_result = pd.concat([cluster_stats, benchmark_result.round(2)], axis=1)
 
     # 7. 保存结果
-    labels.to_csv(out / "cluster_labels.csv", encoding="utf-8-sig", header=["能力等级"])
-    centers.to_csv(out / "cluster_centers_all_indicators.csv", encoding="utf-8-sig")
-    key_centers.to_csv(out / "cluster_key_centers.csv", encoding="utf-8-sig")
+    labels.to_csv(out / "Ab_cluster_labels.csv", encoding="utf-8-sig", header=["能力等级"])
+    centers.to_csv(out / "Ab_cluster_centers_all_indicators.csv", encoding="utf-8-sig")
+    key_centers.to_csv(out / "Ab_cluster_key_centers.csv", encoding="utf-8-sig")
     benchmark_result.to_csv(
-        out / "benchmark_ability_quantification.csv", encoding="utf-8-sig"
+        out / "Ab_quantification.csv", encoding="utf-8-sig"
     )
 
     # 8. PCA可视化
+    plot_cluster_metrics(eval_df, out, best_k=BEST_K)
     plot_pca_visualization(X, labels, out)
     plot_pca_3d_visualization(X, labels, out)
 
