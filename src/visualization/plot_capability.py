@@ -194,7 +194,7 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
 
     # 创建1行3列的子图
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    fig.suptitle("Clustering Evaluation Metrics (k=2~9)", fontsize=16, y=0.95)
+    fig.suptitle("聚类评价指标对比 (k=2-9)", fontsize=16, y=0.95)
 
     # 提取数据
     k_vals = eval_df.index.values
@@ -205,9 +205,9 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
     # 子图1：轮廓系数SC（越大越好）
     ax1 = axes[0]
     ax1.plot(k_vals, sc_vals, marker="o", linewidth=2, markersize=8, color="#2E86AB")
-    ax1.set_xlabel("Number of Clusters (k)")
-    ax1.set_ylabel("Silhouette Coefficient (SC)")
-    ax1.set_title("Silhouette Coefficient", fontsize=14)
+    ax1.set_xlabel("聚类数目 k")
+    ax1.set_ylabel("轮廓系数 SC")
+    ax1.set_title("轮廓系数", fontsize=14)
     ax1.grid(alpha=0.3)
     # 标注最优k（如果指定）
     if best_k is not None and best_k in k_vals:
@@ -217,16 +217,16 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
             color="red",
             s=150,
             zorder=5,
-            label=f"Best k={best_k}",
+            label=f"最优 k={best_k}",
         )
         ax1.legend()
 
     # 子图2：CH指数（越大越好）
     ax2 = axes[1]
     ax2.plot(k_vals, ch_vals, marker="s", linewidth=2, markersize=8, color="#A23B72")
-    ax2.set_xlabel("Number of Clusters (k)")
-    ax2.set_ylabel("Calinski-Harabasz Index (CH)")
-    ax2.set_title("Calinski-Harabasz Index", fontsize=14)
+    ax2.set_xlabel("聚类数目 k")
+    ax2.set_ylabel("CH指数")
+    ax2.set_title("CH指数", fontsize=14)
     ax2.grid(alpha=0.3)
     if best_k is not None and best_k in k_vals:
         ax2.scatter(
@@ -242,9 +242,9 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
     # 子图3：DBI指数（越小越好）
     ax3 = axes[2]
     ax3.plot(k_vals, dbi_vals, marker="^", linewidth=2, markersize=8, color="#F18F01")
-    ax3.set_xlabel("Number of Clusters (k)")
-    ax3.set_ylabel("Davies-Bouldin Index (DBI)")
-    ax3.set_title("Davies-Bouldin Index", fontsize=14)
+    ax3.set_xlabel("聚类数目 k")
+    ax3.set_ylabel("DBI指数")
+    ax3.set_title("DBI指数", fontsize=14)
     ax3.grid(alpha=0.3)
     if best_k is not None and best_k in k_vals:
         ax3.scatter(
@@ -272,7 +272,7 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
 # ====================== 1. 特征相关性热力图（优化版） ======================
 def plot_correlation_heatmap(features_df, save_path=None):
     """
-    绘制最终特征的Pearson相关性热力图（适配多特征、避免文字重叠）
+    绘制最终特征的Pearson相关性热力图
 
     Args:
         features_df: 提取的特征DataFrame
@@ -283,8 +283,29 @@ def plot_correlation_heatmap(features_df, save_path=None):
         print("特征数据为空或特征数<2，跳过相关性热力图绘制")
         return
 
+    feat_name_map = {
+        "steering_angle": "方向盘转角",
+        "steering_velocity": "方向盘角速度",
+        "brake_pedal": "制动踏板开度",
+        "throttle_pedal": "油门踏板开度",
+        "longitudinal_accel": "纵向加速度",
+        "lateral_offset": "横向偏移量",
+        "lateral_accel": "横向加速度",
+        "vehicle_speed": "车速",
+        "gaze_dispersion": "注视点分散度",
+        "blink_frequency": "眨眼频率",
+        "hrv": "心率变异性",
+        "bvp": "血容量脉搏",
+        "ecg": "心电信号",
+        "resp": "呼吸信号",
+    }
+
     set_paper_style()
     corr_mat = features_df.corr()
+
+    # 替换特征名为中文（兼容未匹配的特征名）
+    corr_mat.index = [feat_name_map.get(name, name) for name in corr_mat.index]
+    corr_mat.columns = [feat_name_map.get(name, name) for name in corr_mat.columns]
 
     # 动态调整画布尺寸（按特征数适配）
     n_feat = len(features_df.columns)
@@ -300,16 +321,17 @@ def plot_correlation_heatmap(features_df, save_path=None):
         vmin=-1,
         vmax=1,
         square=True,
-        cbar_kws={"shrink": 0.8, "label": "Pearson Correlation"},
+        cbar_kws={"shrink": 0.8, "label": "Pearson相关系数"},  # 色标标签也改中文
         ax=ax,
         annot_kws={"size": 9},  # 缩小标注字体，避免重叠
     )
-    ax.set_title("Correlation Matrix of Final Driving Features", pad=20)
+    ax.set_title("驾驶特征Pearson相关性热力图", fontsize=14, pad=20)  # 标题改中文
+    ax.tick_params(axis="both", labelsize=10)  # 调整坐标轴标签字体大小
 
     if save_path:
         save_path = Path(save_path)  # 统一路径处理
         os.makedirs(save_path.parent, exist_ok=True)
-        plt.savefig(save_path)
+        plt.savefig(save_path, bbox_inches="tight")  # 加bbox_inches避免中文标签被截断
         print(f"相关性热力图已保存至: {save_path}")
     plt.close()
 
@@ -351,7 +373,7 @@ def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
         color="crimson",
         linestyle="--",
         linewidth=2,
-        label=f"Mean: {mean_val:.3f}",
+        label=f"均值: {mean_val:.3f}",
     )
 
     # 优化：动态计算实际集中区间（1个标准差范围），保留原论文区间标注但补充说明
@@ -361,7 +383,7 @@ def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
         std_range[1],
         color="lightblue",
         alpha=0.3,
-        label=f"±1σ Range [{std_range[0]:.3f}, {std_range[1]:.3f}]",
+        label=f"±1σ 区间 [{std_range[0]:.3f}, {std_range[1]:.3f}]",
     )
     # 保留论文区间，标注实际占比（当前数据中该区间占比极低）
     paper_range = [-0.05, 0.05]
@@ -373,14 +395,14 @@ def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
         paper_range[1],
         color="lightgray",
         alpha=0.3,
-        label=f"Paper Range [-0.05, 0.05] (In: {in_paper_range:.1%})",
+        label=f"论文区间 [-0.05, 0.05] (In: {in_paper_range:.1%})",
     )
 
     # 调整文本位置，避免超出画布
     ax.text(
         0.95,
         0.85,
-        f"Mean: {mean_val:.3f}\nStd: {std_val:.3f}\nPaper Range In: {in_paper_range:.1%}",
+        f"均值: {mean_val:.3f}\n标准差: {std_val:.3f}\n论文区间 In: {in_paper_range:.1%}",
         transform=ax.transAxes,
         ha="right",
         va="top",
@@ -388,9 +410,9 @@ def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
         fontsize=10,
     )
 
-    ax.set_xlabel("Driving Ability Fluctuation ($A_{fl}$)")
-    ax.set_ylabel("Frequency")
-    ax.set_title("Distribution of Driving Ability Fluctuation", pad=20)
+    ax.set_xlabel("驾驶能力波动量 Afl")
+    ax.set_ylabel("频次")
+    ax.set_title("驾驶能力波动量分布", pad=20)
     ax.legend(loc="upper left", fontsize=9)
     sns.despine(ax=ax)
 
@@ -431,15 +453,15 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
     if len(quantiles) < n_groups + 1:
         quantiles = np.linspace(abs_fluct.min(), abs_fluct.max(), n_groups + 1)
 
-    # 分组标签（适配任意n_groups）
+    # 分组标签（适配任意n_groups，全中文）
     if n_groups == 2:
-        group_labels = ["High Baseline", "Low Baseline"]
+        group_labels = ["高基准能力组", "低基准能力组"]
     elif n_groups == 3:
-        group_labels = ["High Baseline", "Medium Baseline", "Low Baseline"]
+        group_labels = ["高基准能力组", "中基准能力组", "低基准能力组"]
     elif n_groups == 4:
-        group_labels = ["Very High", "High", "Low", "Very Low"]
+        group_labels = ["极高基准能力组", "高基准能力组", "低基准能力组", "极低基准能力组"]
     else:
-        group_labels = [f"Group {i+1}" for i in range(n_groups)]
+        group_labels = [f"第{i+1}组" for i in range(n_groups)]
 
     # 避免标签数与分位数不匹配
     if len(quantiles) - 1 != len(group_labels):
@@ -455,15 +477,15 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
 
     # 构建DataFrame用于绘图
     plot_df = pd.DataFrame(
-        {"Fluctuation": fluctuation_arr, "Baseline Ability Group": groups}
+        {"Fluctuation": fluctuation_arr, "基准能力组别": groups}
     )
 
     # 2. 绘制箱线图（修复palette警告）
     fig, ax = plt.subplots(figsize=(10, 6))
     sns.boxplot(
-        x="Baseline Ability Group",
+        x="基准能力组别",
         y="Fluctuation",
-        hue="Baseline Ability Group",  # 添加hue参数，匹配palette
+        hue="基准能力组别",  # 添加hue参数，匹配palette
         data=plot_df,
         palette="viridis",
         showfliers=False,  # 隐藏异常值点使图更整洁
@@ -478,7 +500,7 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
         group_data = []
         valid_labels = []
         for lbl in group_labels:
-            group_vals = plot_df[plot_df["Baseline Ability Group"] == lbl][
+            group_vals = plot_df[plot_df["基准能力组别"] == lbl][
                 "Fluctuation"
             ].values
             if len(group_vals) > 0:
@@ -507,27 +529,34 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
     except Exception as e:
         print(f"ANOVA统计计算失败: {e}")
 
-    # 4. 标注各组均值（修复observed警告）
+    # 4. 标注各组均值（替换为红色小三角，去掉数字）
     try:
-        means = plot_df.groupby("Baseline Ability Group", observed=False)[
+        means = plot_df.groupby("基准能力组别", observed=False)[
             "Fluctuation"
         ].mean()
         for i, lbl in enumerate(means.index):
-            ax.text(
-                i,
-                means[lbl],
-                f"{means[lbl]:.3f}",
-                ha="center",
-                va="bottom",
-                fontweight="bold",
-                color="crimson",
-                fontsize=9,
+            # 绘制红色小三角标记均值位置
+            ax.scatter(
+                i,                  # X轴位置（对应分组）
+                means[lbl],         # Y轴位置（均值）
+                color="crimson",    # 红色
+                marker="^",         # 三角形状
+                s=40,               # 小尺寸（可根据需要调整）
+                zorder=10,          # 置于顶层，避免被遮挡
+                edgecolors=None,
+                linewidth=0
             )
     except Exception as e:
         print(f"均值标注失败: {e}")
 
-    ax.set_ylabel("Driving Ability Fluctuation ($A_{fl}$)")
-    ax.set_title("Driving Ability Fluctuation by Baseline Ability Group", pad=20)
+    # 核心修改1：去掉X轴标题，调整X轴刻度文字大小（和Y轴标签/刻度一致）
+    ax.set_xlabel("")
+    # 调整X轴刻度文字大小为14（和Y轴标签大小一致，set_paper_style中axes.labelsize=14）
+    # 若想和Y轴刻度大小一致，改为labelsize=10（set_paper_style中ytick.labelsize=10）
+    ax.tick_params(axis='x', labelsize=14)
+    # 核心修改2：Y轴保留中文，标题改中文
+    ax.set_ylabel("驾驶能力波动量 Afl")
+    ax.set_title("不同基准能力组的驾驶能力波动量", pad=20)
     sns.despine(ax=ax)
 
     if save_path:
@@ -536,7 +565,6 @@ def plot_grouped_boxplot(fluctuation_arr, n_groups=3, save_path=None):
         plt.savefig(save_path)
         print(f"分组箱线图已保存至: {save_path}")
     plt.close()
-
 
 # ====================== 主调用函数（优化路径处理） ======================
 def run_all_visualizations(result_pkl_path, output_dir="output/figs"):
@@ -579,4 +607,6 @@ def run_all_visualizations(result_pkl_path, output_dir="output/figs"):
     plot_fluctuation_distribution(
         fluctuation_arr, save_path=output_dir / "Afl_fluctuation_dist.png"
     )
-    plot_grouped_boxplot(fluctuation_arr, save_path=output_dir / "Afl_grouped_boxplot.png")
+    plot_grouped_boxplot(
+        fluctuation_arr, save_path=output_dir / "Afl_grouped_boxplot.png"
+    )

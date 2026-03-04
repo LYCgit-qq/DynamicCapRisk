@@ -1,0 +1,27 @@
+# 路径配置
+data_path: "data/processed/raw_data.pkl"
+output_path: "output/1_capability_assessment/Afl_capability_fluctuation.pkl"
+
+# 窗口配置（单位：秒）
+window_seconds: 3
+sampling_rates:
+  act: 60    # act采样率Hz
+  eye: 120   # eye采样率Hz
+  phy: 100   # phy采样率Hz
+
+# 特征筛选阈值
+correlation_threshold: 0.8
+vif_threshold: 10
+
+# 波动量计算参数
+fluctuation_k: 0.4
+fluctuation_stats_range:
+  min: -0.05
+  max: 0.05
+
+# 分组参数
+baseline_quantiles: [0.0, 0.3333, 0.6667, 1.0]
+baseline_group_labels: ["low_baseline_group", "medium_baseline_group", "high_baseline_group"]
+
+# 可视化配置
+visualization_output_dir: "output/1_capability_assessment"
