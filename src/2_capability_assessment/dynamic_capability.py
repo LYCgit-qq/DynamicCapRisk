@@ -305,15 +305,11 @@ def validate_results(all_dynamic_cap, config):
 def save_results(all_dynamic_cap, exp_dynamic_df, group_stats, validate_dict, config):
     out     = config["full_paths"]["output_dir"]
     ab_mode = config["calculation"].get("ab_mode", "Ab")
-    prefix  = f"Ad_{ab_mode}"   # 文件名前缀区分模式，e.g. Ad_Ab_xxx / Ad_Abc_xxx
+    prefix  = f"Ad_{ab_mode}"
 
     # 全局 Ad 值
     pd.DataFrame({"动态驾驶能力Ad": all_dynamic_cap}).to_csv(
         os.path.join(out, f"{prefix}_global_values.csv"),
-        index=False, encoding="utf-8-sig",
-    )
-    pd.DataFrame({"动态驾驶能力Ad": all_dynamic_cap}).to_csv(
-        os.path.join(out, f"Ad_global_values.csv"),
         index=False, encoding="utf-8-sig",
     )
     # 实验级明细
@@ -339,8 +335,22 @@ def save_results(all_dynamic_cap, exp_dynamic_df, group_stats, validate_dict, co
         f.write("=== 各能力组统计 ===\n")
         f.write(group_stats.to_string())
 
-    print(f"\n💾 结果已保存至：{out}")
+    # 保存 pkl（参考 Afl 格式）
+    dynamic_cap_sample = validate_dict.pop("sample_dynamic_capability", [])  # 从主函数传入
+    ad_result = {
+        "dynamic_capability":       all_dynamic_cap,      # 全局 Ad 数组
+        "sample_dynamic_capability": dynamic_cap_sample,   # 各实验的 Ad 数组列表
+        "exp_detail":               exp_dynamic_df,        # 实验级明细 DataFrame
+        "group_stats":              group_stats,           # 分组统计 DataFrame
+        "validation_report":        validate_dict,         # 验证报告字典
+        "config":                   config,                # 配置信息
+    }
+    pkl_path = os.path.join(out, f"Ad_result.pkl")
+    with open(pkl_path, "wb") as f:
+        pickle.dump(ad_result, f)
+    print(f"   PKL 结果已保存：{pkl_path}")
 
+    print(f"\n💾 结果已保存至：{out}（前缀：{prefix}）")
 
 # ====================== 主函数 ======================
 if __name__ == "__main__":

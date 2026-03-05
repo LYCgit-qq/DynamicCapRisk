@@ -95,6 +95,36 @@ def sliding_window_mean(data, window_size):
     return data_reshaped.mean(axis=1)
 
 
+def sliding_window_mode_for_last_col(data, window_size):
+    """
+    针对最后一列的滑动窗口处理规则：
+    - 非重叠窗口
+    - 窗口内全0 → 窗口值为0
+    - 窗口内有非0值 → 取出现次数最多的数（众数），1/2/3共存时取出现次数最多的
+    """
+    arr = np.asarray(data)
+    if arr.shape[0] < window_size:
+        return np.empty(0)
+    n_windows = arr.shape[0] // window_size
+    trimmed = arr[: n_windows * window_size]
+    # 重塑为(窗口数, 窗口大小)
+    reshaped = trimmed.reshape(n_windows, window_size)
+
+    # 处理每个窗口
+    window_results = []
+    for window in reshaped:
+        # 统计非0值
+        non_zero = window[window != 0]
+        if len(non_zero) == 0:
+            window_results.append(0)
+        else:
+            # 计算众数（取出现次数最多的值）
+            vals, counts = np.unique(non_zero, return_counts=True)
+            mode_val = vals[np.argmax(counts)]
+            window_results.append(mode_val)
+    return np.array(window_results, dtype=int)
+
+
 def preprocess_single_sample(act, eye, phy, config):
     """单样本多模态数据时间窗口对齐"""
     window_seconds = config["window_seconds"]
@@ -104,7 +134,27 @@ def preprocess_single_sample(act, eye, phy, config):
     win_eye = sampling_rates["eye"] * window_seconds  # 360
     win_phy = sampling_rates["phy"] * window_seconds  # 300
 
-    act_win = sliding_window_mean(act, win_act)
+    # ===== 处理act数据：最后一列特殊逻辑，其他列正常均值 =====
+    if act.size == 0:
+        act_other_win = np.empty((0, act.shape[1]-1) if act.ndim>1 else (0,))
+        act_last_win = np.empty(0)
+    else:
+        # 拆分最后一列（需要特殊处理）和其他列（正常均值）
+        act_other = act[:, :-1]  # 除最后一列外的所有列
+        act_last = act[:, -1]    # 最后一列（sample_field列）
+        
+        # 其他列：正常滑动窗口均值
+        act_other_win = sliding_window_mean(act_other, win_act)
+        # 最后一列：自定义规则（众数/全0判断）
+        act_last_win = sliding_window_mode_for_last_col(act_last, win_act)
+    
+    # 合并其他列和处理后的最后一列
+    if len(act_other_win) > 0 and len(act_last_win) > 0:
+        act_win = np.hstack([act_other_win, act_last_win.reshape(-1, 1)])
+    else:
+        act_win = np.empty((0, act.shape[1]) if act.ndim>1 else (0,))
+
+    # eye/phy 保持原有均值逻辑不变
     eye_win = sliding_window_mean(eye, win_eye)
     phy_win = sliding_window_mean(phy, win_phy)
 
@@ -147,10 +197,10 @@ def extract_features_single_sample(act_win, eye_win, phy_win):
     df["throttle_pedal"] = np.abs(act_win[:, 0])
 
     # ---------- 车辆响应特征 ----------
-    df["longitudinal_accel"] = np.abs(act_win[:, 4])   # ① 纵向加速度幅度
-    df["lateral_offset"]     = np.abs(act_win[:, 8])   # ① 横向偏移幅度
-    df["lateral_accel"]      = np.abs(act_win[:, 5])   # ① 横向加速度幅度
-    df["vehicle_speed"]      = act_win[:, 3]            # 车速本身非负，保留
+    df["longitudinal_accel"] = np.abs(act_win[:, 4])  # ① 纵向加速度幅度
+    df["lateral_offset"] = np.abs(act_win[:, 8])  # ① 横向偏移幅度
+    df["lateral_accel"] = np.abs(act_win[:, 5])  # ① 横向加速度幅度
+    df["vehicle_speed"] = act_win[:, 3]  # 车速本身非负，保留
 
     # ---------- 眼动认知特征 ----------
     if eye_win is not None and len(eye_win) > 0 and eye_win.shape[1] >= 3:
@@ -162,16 +212,16 @@ def extract_features_single_sample(act_win, eye_win, phy_win):
 
     # ---------- 生理状态特征 ----------
     if phy_win is not None and len(phy_win) > 0 and phy_win.shape[1] >= 5:
-        df["hrv"]  = np.abs(phy_win[:, 4])  # ③ 消除极少数负异常值
-        df["hr"]   = phy_win[:, 3]
-        df["bvp"]  = phy_win[:, 0]
-        df["ecg"]  = phy_win[:, 1]
+        df["hrv"] = np.abs(phy_win[:, 4])  # ③ 消除极少数负异常值
+        df["hr"] = phy_win[:, 3]
+        df["bvp"] = phy_win[:, 0]
+        df["ecg"] = phy_win[:, 1]
         df["resp"] = phy_win[:, 2]
     else:
-        df["hrv"]  = 0.0
-        df["hr"]   = 0.0
-        df["bvp"]  = 0.0
-        df["ecg"]  = 0.0
+        df["hrv"] = 0.0
+        df["hr"] = 0.0
+        df["bvp"] = 0.0
+        df["ecg"] = 0.0
         df["resp"] = 0.0
 
     return df.dropna(axis=1)
@@ -345,17 +395,19 @@ def save_feature_weights(ahp_w, ent_w, combined_w, outdir):
     )
     weight_data = []
     for feat_name in existing_features:
-        ahp_val  = ahp_w.get(feat_name, 0.0)
-        ent_val  = ent_w.get(feat_name, 0.0)
+        ahp_val = ahp_w.get(feat_name, 0.0)
+        ent_val = ent_w.get(feat_name, 0.0)
         comb_val = combined_w.get(feat_name, 0.0)
         if ahp_val == 0.0 and ent_val == 0.0 and comb_val == 0.0:
             continue
-        weight_data.append({
-            "feature_name":   feat_name,
-            "AHP_weight":     round(ahp_val, 4),
-            "entropy_weight": round(ent_val, 4),
-            "combined_weight":round(comb_val, 4),
-        })
+        weight_data.append(
+            {
+                "feature_name": feat_name,
+                "AHP_weight": round(ahp_val, 4),
+                "entropy_weight": round(ent_val, 4),
+                "combined_weight": round(comb_val, 4),
+            }
+        )
     weight_df = pd.DataFrame(weight_data)
     save_path = os.path.join(outdir, "Afl_feature_combined_weights.csv")
     weight_df.to_csv(save_path, index=False, encoding="utf-8-sig")
@@ -366,13 +418,16 @@ def save_correlation_dropped(dropped_corr, features_df, outdir):
     """Save features dropped by correlation analysis"""
     paper_dropped = ["vehicle_speed", "follow_distance", "throttle_pedal"]
     dropped_filtered = [f for f in dropped_corr if f in paper_dropped]
-    dropped_df = pd.DataFrame({
-        "dropped_feature": dropped_filtered,
-        "drop_reason": "Pearson correlation coefficient > 0.8",
-    })
+    dropped_df = pd.DataFrame(
+        {
+            "dropped_feature": dropped_filtered,
+            "drop_reason": "Pearson correlation coefficient > 0.8",
+        }
+    )
     dropped_df.to_csv(
         os.path.join(outdir, "Afl_dropped_features_correlation.csv"),
-        index=False, encoding="utf-8-sig",
+        index=False,
+        encoding="utf-8-sig",
     )
     corr_matrix = features_df.corr()
     corr_matrix.to_csv(
@@ -386,23 +441,31 @@ def save_fluctuation_stats(A_fl, outdir, config):
     stats_range = config["fluctuation_stats_range"]
     in_range_ratio = (
         np.sum((A_fl >= stats_range["min"]) & (A_fl <= stats_range["max"]))
-        / len(A_fl) * 100
+        / len(A_fl)
+        * 100
     )
-    stats_df = pd.DataFrame({
-        "statistic_index": [
-            "min_value", "max_value", "mean_value", "std_value",
-            f"ratio_in_range({stats_range['min']}~{stats_range['max']})(%)"],
-        "value": [
-            round(A_fl.min(), 4),
-            round(A_fl.max(), 4),
-            round(A_fl.mean(), 4),
-            round(A_fl.std(), 4),
-            round(in_range_ratio, 1),
-        ],
-    })
+    stats_df = pd.DataFrame(
+        {
+            "statistic_index": [
+                "min_value",
+                "max_value",
+                "mean_value",
+                "std_value",
+                f"ratio_in_range({stats_range['min']}~{stats_range['max']})(%)",
+            ],
+            "value": [
+                round(A_fl.min(), 4),
+                round(A_fl.max(), 4),
+                round(A_fl.mean(), 4),
+                round(A_fl.std(), 4),
+                round(in_range_ratio, 1),
+            ],
+        }
+    )
     stats_df.to_csv(
         os.path.join(outdir, "Afl_fluctuation_overall_stats.csv"),
-        index=False, encoding="utf-8-sig",
+        index=False,
+        encoding="utf-8-sig",
     )
 
 
@@ -417,10 +480,12 @@ def save_fluctuation_by_group(A_fl, baseline_labels, outdir, config):
             include_lowest=True,
         )
     group_df = (
-        pd.DataFrame({
-            "baseline_capability_group": baseline_labels,
-            "driving_capability_fluctuation_Afl": A_fl,
-        })
+        pd.DataFrame(
+            {
+                "baseline_capability_group": baseline_labels,
+                "driving_capability_fluctuation_Afl": A_fl,
+            }
+        )
         .groupby("baseline_capability_group", observed=False)
         .agg({"driving_capability_fluctuation_Afl": ["mean", "std"]})
         .round(4)
@@ -429,26 +494,33 @@ def save_fluctuation_by_group(A_fl, baseline_labels, outdir, config):
     group_df.reset_index(inplace=True)
     group_df.to_csv(
         os.path.join(outdir, "Afl_fluctuation_by_baseline_group.csv"),
-        index=False, encoding="utf-8-sig",
+        index=False,
+        encoding="utf-8-sig",
     )
 
 
 # ====================== 主流程 ======================
 def main():
     """Entry point（适配67个样本列表结构）"""
-    args   = parse_args()
+    args = parse_args()
     config = load_config(args.config)
 
-    if args.data_path:   config["data_path"]             = args.data_path
-    if args.output_path: config["output_path"]            = args.output_path
-    if args.corr_thresh: config["correlation_threshold"]  = args.corr_thresh
-    if args.vif_thresh:  config["vif_threshold"]          = args.vif_thresh
-    if args.window_sec:  config["window_seconds"]         = args.window_sec
-    if args.fluct_k:     config["fluctuation_k"]          = args.fluct_k
+    if args.data_path:
+        config["data_path"] = args.data_path
+    if args.output_path:
+        config["output_path"] = args.output_path
+    if args.corr_thresh:
+        config["correlation_threshold"] = args.corr_thresh
+    if args.vif_thresh:
+        config["vif_threshold"] = args.vif_thresh
+    if args.window_sec:
+        config["window_seconds"] = args.window_sec
+    if args.fluct_k:
+        config["fluctuation_k"] = args.fluct_k
 
-    data_path   = config["data_path"]
+    data_path = config["data_path"]
     output_path = config["output_path"]
-    outdir      = os.path.dirname(output_path)
+    outdir = os.path.dirname(output_path)
 
     if not os.path.isfile(data_path):
         raise FileNotFoundError(f"input file not found: {data_path}")
@@ -460,8 +532,9 @@ def main():
     print(f"单个样本act维度示例: {act_raw[0].shape}")
 
     # 2. 特征提取（含绝对值预处理）
-    all_features         = []
+    all_features = []
     sample_window_counts = []
+    sample_field_list = []
     for i in range(len(act_raw)):
         act_win, eye_win, phy_win = preprocess_single_sample(
             act_raw[i], eye_raw[i], phy_raw[i], config
@@ -469,7 +542,11 @@ def main():
         if act_win is None:
             print(f"跳过样本{i+1}：无有效窗口")
             sample_window_counts.append(0)
+            sample_field_list.append(np.array([]))  # <--- 新增：无窗口时存空数组
             continue
+        field_vals = act_win[:, -1].astype(int)
+        field_vals = np.clip(field_vals, 0, 3)
+        sample_field_list.append(field_vals)
         sample_feat = extract_features_single_sample(act_win, eye_win, phy_win)
         if not sample_feat.empty:
             sample_feat["sample_id"] = i
@@ -491,10 +568,10 @@ def main():
         features_df = features_df.drop(columns=["sample_id"])
 
     # 3. 特征筛选
-    features_corr,  dropped_corr = correlation_filter(
+    features_corr, dropped_corr = correlation_filter(
         features_df, threshold=config["correlation_threshold"]
     )
-    features_final, vif_result   = vif_filter(
+    features_final, vif_result = vif_filter(
         features_corr, threshold=config["vif_threshold"]
     )
     print(f"\n=== 特征筛选完成 ===")
@@ -505,8 +582,8 @@ def main():
         raise RuntimeError("所有特征被筛选删除，无法继续计算")
 
     # 4. 权重计算
-    ahp_w      = ahp_weights_adapted(save_path=os.path.join(outdir, "Afl_ahp_weights.csv"))
-    ent_w      = entropy_weights(features_final)
+    ahp_w = ahp_weights_adapted(save_path=os.path.join(outdir, "Afl_ahp_weights.csv"))
+    ent_w = entropy_weights(features_final)
     combined_w = combine_weights(ahp_w, ent_w, features_final.columns)
     print(f"\n=== 权重计算完成 ===")
     print("组合权重（特征: 权重）:")
@@ -520,7 +597,11 @@ def main():
     print(f"波动量均值: {A_fl.mean():.4f}")
     print(f"波动量标准差: {A_fl.std():.4f}")
     stats_range = config["fluctuation_stats_range"]
-    in_range = np.sum((A_fl >= stats_range["min"]) & (A_fl <= stats_range["max"])) / len(A_fl) * 100
+    in_range = (
+        np.sum((A_fl >= stats_range["min"]) & (A_fl <= stats_range["max"]))
+        / len(A_fl)
+        * 100
+    )
     print(f"落在[{stats_range['min']}, {stats_range['max']}]的比例: {in_range:.1f}%")
 
     # 6. 拆分波动量为67个样本
@@ -540,13 +621,14 @@ def main():
         os.makedirs(outdir, exist_ok=True)
 
     result = {
-        "features":             features_final,
-        "weights":              combined_w,
-        "fluctuation":          A_fl,
-        "vif":                  vif_result,
-        "S_fl":                 S_fl,
+        "features": features_final,
+        "weights": combined_w,
+        "fluctuation": A_fl,
+        "vif": vif_result,
+        "S_fl": S_fl,
         "sample_window_counts": sample_window_counts,
-        "sample_fluctuations":  sample_fluctuations,
+        "sample_fluctuations": sample_fluctuations,
+        "sample_field": sample_field_list,
     }
     with open(output_path, "wb") as f:
         pickle.dump(result, f)

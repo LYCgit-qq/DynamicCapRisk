@@ -1,0 +1,63 @@
+# 风险场强计算配置文件
+# Risk Field Calculation Configuration
+
+# ============= 权重系数（来自论文AHP-熵权组合赋权）=============
+weights:
+  # 综合场强权重
+  w_veh: 0.55    # 车辆交互权重
+  w_geo: 0.25    # 道路几何权重
+  w_sign: 0.20   # 道路设施权重
+  
+  # 道路设施子项权重
+  lambda_1: 0.6  # 标志密度权重
+  lambda_2: 0.4  # 施工区存在权重
+
+# ============= 道路几何特征赋值规则 =============
+geometry:
+  # 曲率等级映射
+  curvature_map:
+    straight: 0.0    # 直线
+    cross: 0.5       # 十字路口
+    bend: 1.0        # 弯道
+  
+  # 车道数量赋值（逆向：车道越少赋值越高）
+  lane_map:
+    1: 1.0     # 单车道
+    2: 0.5     # 两车道
+    4: 0.0     # 四车道
+  
+  # 车道宽度赋值（基于车道数推断）
+  lane_width_map:
+    4: 0.0     # 标准宽度
+    2: 0.5     # 可能较窄
+    1: 1.0     # 窄路
+
+# ============= 车辆交互场强静态估计值 =============
+vehicle_interaction:
+  baseline: 0.3           # 基线值：无施工区直道
+  work_zone: 0.65         # 施工区内
+  complex_geometry: 0.85  # 施工区+弯道/路口
+
+# ============= 场强等级划分 =============
+field_levels:
+  low: [0.0, 0.3]        # 低风险
+  medium: [0.3, 0.5]     # 中风险
+  medium_high: [0.5, 0.7]  # 中高风险
+  high: [0.7, 1.0]       # 高风险
+
+# ============= 计算参数 =============
+calculation:
+  window_size: 100  # 标志密度计算的滑动窗口大小（米）
+
+# ============= 路径配置 =============
+paths:
+  input_dir: 'data/processed'      # 输入目录
+  output_dir: 'data/risk_field'    # 输出目录
+  vis_dir: 'visualizations'        # 可视化输出目录
+
+# ============= 场景配置 =============
+scenarios:
+  default:
+    - test00
+    - test01
+    - test02
