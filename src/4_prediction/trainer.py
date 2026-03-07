@@ -8,7 +8,7 @@ MT-JP 模型训练器
 
 用法：
   python trainer.py
-  python trainer.py -c config/trainer.yaml
+  python trainer.py -c config/mtjp_trainer.yaml
   多次训练对比：tensorboard --logdir output/3_prediction/runs
 """
 
@@ -33,7 +33,7 @@ warnings.filterwarnings("ignore")
 
 # 允许从同级目录导入
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mtjp_model import MTJP, build_model
+from src.models.mtjp_model import MTJP, build_model
 
 
 # =============================================================================
@@ -42,7 +42,7 @@ from mtjp_model import MTJP, build_model
 
 _DEFAULTS = {
     "paths": {
-        "dataset_pkl": "output/3_prediction/mtjp_dataset.pkl",
+        "dataset_pkl": "data/dataset/mtjp_dataset.pkl",
         "runs_root":   "output/3_prediction/runs",   # 所有运行的根目录
     },
     "model": {
@@ -83,7 +83,7 @@ _DEFAULTS = {
 }
 
 _DEFAULT_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "trainer.yaml"
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "mtjp_trainer.yaml"
 )
 
 
@@ -554,7 +554,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("-c", "--config",  type=str,   default=None,
-                        help="YAML 配置文件路径（默认: config/trainer.yaml）")
+                        help="YAML 配置文件路径（默认: config/mtjp_trainer.yaml）")
     parser.add_argument("--batch_size",    type=int,   default=None)
     parser.add_argument("--max_epochs",    type=int,   default=None)
     parser.add_argument("--lr",            type=float, default=None)

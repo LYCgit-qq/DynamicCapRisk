@@ -4,9 +4,10 @@
 # ============================================================
 
 paths:
-  dataset_pkl: "output/3_prediction/mtjp_dataset.pkl"
+  dataset_pkl: "data/dataset/mtjp_dataset.pkl"
   output_dir:  "output/3_prediction/checkpoints"
   log_csv:     "output/3_prediction/train_log.csv"
+  runs_root":   "output/3_prediction/runs"
 
 model:
   seq_len:    5        # 历史步数 T（需与 dataset.yaml model.seq_len 一致）

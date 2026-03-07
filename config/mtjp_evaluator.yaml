@@ -4,7 +4,7 @@
 # ============================================================
 
 paths:
-  dataset_pkl: "output/3_prediction/mtjp_dataset.pkl"
+  dataset_pkl: "data/dataset/mtjp_dataset.pkl"
   ckpt:        "output/3_prediction/checkpoints/best_model.pt"
   output_dir:  "output/3_prediction/evaluation"
 

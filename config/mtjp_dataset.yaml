@@ -7,8 +7,8 @@ paths:
   raw_pkl:       "data/processed/raw_data.pkl"
   cap_pkl:       "output/1_capability_assessment/Afl_capability_fluctuation.pkl"
   risk_csv:      "output/2_risk_assessment/results/risk_windows_all.csv"
-  output_pkl:    "output/3_prediction/mtjp_dataset.pkl"
-  output_stats:  "output/3_prediction/mtjp_dataset_stats.csv"
+  output_pkl:    "data/dataset/mtjp_dataset"         # 移除.pkl后缀，后续动态拼接
+  output_stats:  "data/dataset/mtjp_dataset_stats"  # 移除.csv后缀，后续动态拼接
 
 window:
   window_seconds: 3       # 每个能力评估窗口时长 (s)
@@ -30,6 +30,73 @@ split:
 normalization:
   zscore: true            # 对输入特征 X 做 Z-score（统计量仅来自训练集）
                           # F_S(最后一维)已归一化至[0,1]，不参与标准化
+
+# ============================================================
+# 数据增强配置
+# 增强在 Z-score 标准化之前执行，仅作用于训练集
+# 增强样本追加到原始训练集后（不替换），最终 N 增大
+# F_S（第17维，环境特征）在所有策略中保持不变
+# ============================================================
+augmentation:
+  enabled:       true         # 总开关：true=启用 / false=关闭
+  only_on_train: true          # 仅对训练集增强，val/test 不受影响
+
+  methods:
+    # ----------------------------------------------------------
+    # 高斯噪声：模拟传感器随机误差
+    # 噪声 std = |各维特征均值| × std_scale
+    # ----------------------------------------------------------
+    gaussian_noise:
+      enabled:   true
+      std_scale: 0.05          # 噪声强度（相对于特征均值的比例）
+      prob:      1.0           # 每个训练样本被选中增强的概率
+
+    # ----------------------------------------------------------
+    # 时间扭曲：模拟驾驶行为的时间弹性变化
+    # 生成平滑随机扭曲后对时间轴重采样
+    # ----------------------------------------------------------
+    time_warp:
+      enabled:   true
+      sigma:     0.2           # 扭曲幅度（越大扭曲越强）
+      prob:      0.5
+
+    # ----------------------------------------------------------
+    # 窗口裁剪：随机截取连续片段后插值回原长度
+    # 适合历史步数较长时增加局部时间多样性
+    # ----------------------------------------------------------
+    window_slice:
+      enabled:   false
+      slice_ratio: 0.9         # 保留的时间步比例（0.9 = 保留90%）
+      prob:      0.3
+
+    # ----------------------------------------------------------
+    # 特征随机置零：模拟传感器缺失或信号遮挡
+    # 对前16维（多模态特征）按维度随机置零，F_S 不变
+    # ----------------------------------------------------------
+    feature_dropout:
+      enabled:   true
+      drop_prob: 0.1           # 每个特征维度被置零的概率
+      prob:      0.5
+
+    # ----------------------------------------------------------
+    # 幅值扭曲：模拟驾驶人生理/行为的个体幅度差异
+    # 对前16维乘以平滑随机缩放曲线，F_S 不变
+    # ----------------------------------------------------------
+    magnitude_warp:
+      enabled:   true
+      sigma:     0.1           # 缩放曲线的抖动幅度
+      prob:      0.5
+
+    # ----------------------------------------------------------
+    # Mixup：跨样本线性插值
+    # 回归标签（y_ability / y_risk_reg）按权重插值
+    # 分类标签（y_risk_cls）取权重较大一方（hard label）
+    # 在样本量较少时效果显著，样本充足时可关闭
+    # ----------------------------------------------------------
+    mixup:
+      enabled:   false
+      alpha:     0.4           # Beta(alpha, alpha) 采样参数
+      prob:      0.3
 
 risk_level_map:
   "低风险": 0

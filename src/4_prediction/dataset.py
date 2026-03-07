@@ -1,5 +1,3 @@
-# D:\Local\DynamicCapRisk\src\4_prediction\dataset.py
-
 """
 build_mtjp_dataset.py
 MT-JP 联合预测模型数据集构建模块
@@ -19,8 +17,8 @@ MT-JP 联合预测模型数据集构建模块
   - y_risk_reg : 未来步 风险度 R*           ∈ [-1,1]
   - y_risk_cls : 未来步 风险等级 {0=低,1=中,2=高}
 
-输出：
-  mtjp_dataset.pkl   含 train/val/test 三个 split，每个 split 为 dict：
+输出（保存至 data/processed/）：
+  mtjp_dataset_xxx.pkl   含 train/val/test 三个 split，每个 split 为 dict：
     {
       "X"         : np.ndarray  (N, T, D)      float32 输入序列（T步历史）
       "y_ability" : np.ndarray  (N,)            float32 未来步能力标签
@@ -29,12 +27,13 @@ MT-JP 联合预测模型数据集构建模块
       "meta"      : pd.DataFrame (N,)           含 sample_idx / window_idx / field_label
                                                  (window_idx 为目标步索引)
     }
-  mtjp_dataset_stats.csv   特征统计（供推理时 Z-score 标准化用）
+  mtjp_dataset_stats_xxx.csv   特征统计（供推理时 Z-score 标准化用）
 
 用法：
-  python dataset.py                              # 使用默认 config/dataset.yaml
-  python dataset.py -c path/to/dataset.yaml      # 指定配置文件
+  python dataset.py                              # 使用默认 config/mtjp_dataset.yaml
+  python dataset.py -c path/to/mtjp_dataset.yaml      # 指定配置文件
   python dataset.py --seq_len 5 --seed 42        # 命令行参数覆盖 yaml
+  python dataset.py --no_augment                 # 禁用数据增强（覆盖 yaml）
 """
 
 import os
@@ -51,7 +50,7 @@ warnings.filterwarnings("ignore")
 
 
 # =============================================================================
-# 默认配置（与 config/dataset.yaml 保持同步，作为 fallback）
+# 默认配置（与 config/mtjp_dataset.yaml 保持同步，作为 fallback）
 # =============================================================================
 
 _DEFAULTS = {
@@ -59,8 +58,8 @@ _DEFAULTS = {
         "raw_pkl":       "data/processed/raw_data.pkl",
         "cap_pkl":       "output/1_capability_assessment/Afl_capability_fluctuation.pkl",
         "risk_csv":      "output/2_risk_assessment/results/risk_windows_all.csv",
-        "output_pkl":    "output/3_prediction/mtjp_dataset.pkl",
-        "output_stats":  "output/3_prediction/mtjp_dataset_stats.csv",
+        "output_pkl":    "data/processed/mtjp_dataset",         # 移除.pkl后缀
+        "output_stats":  "data/processed/mtjp_dataset_stats",  # 移除.csv后缀
     },
     "window": {
         "window_seconds": 3,
@@ -80,6 +79,44 @@ _DEFAULTS = {
     "normalization": {
         "zscore": True,
     },
+    # ── 数据增强配置 ───────────────────────────────────────────────────────────
+    "augmentation": {
+        "enabled":       False,          # 总开关（False = 不增强）
+        "only_on_train": True,           # 仅对训练集增强
+        "methods": {
+            "gaussian_noise": {
+                "enabled":   True,
+                "std_scale": 0.05,       # 噪声 std = |特征均值| × std_scale
+                "prob":      1.0,        # 每个样本被选中的概率
+            },
+            "time_warp": {
+                "enabled":   True,
+                "sigma":     0.2,        # 扭曲幅度
+                "prob":      0.5,
+            },
+            "window_slice": {
+                "enabled":   False,
+                "slice_ratio": 0.9,      # 保留的时间步比例
+                "prob":      0.3,
+            },
+            "feature_dropout": {
+                "enabled":   True,
+                "drop_prob": 0.1,        # 每维特征被置零的概率
+                "prob":      0.5,
+            },
+            "magnitude_warp": {
+                "enabled":   True,
+                "sigma":     0.1,
+                "prob":      0.5,
+            },
+            "mixup": {
+                "enabled":   False,
+                "alpha":     0.4,        # Beta(alpha, alpha) 采样
+                "prob":      0.3,
+            },
+        },
+    },
+    # ─────────────────────────────────────────────────────────────────────────
     "risk_level_map": {
         "低风险": 0,
         "中风险": 1,
@@ -90,7 +127,7 @@ _DEFAULTS = {
 
 # 默认配置文件路径（与脚本同级的 config/ 目录）
 _DEFAULT_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "dataset.yaml"
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "mtjp_dataset.yaml"
 )
 
 
@@ -108,10 +145,9 @@ def load_config(path: Optional[str] = None) -> dict:
     """
     加载配置：
       1. 以内置 _DEFAULTS 为基底
-      2. 若指定 path 存在，覆盖合并；否则尝试默认路径 config/dataset.yaml
+      2. 若指定 path 存在，覆盖合并；否则尝试默认路径 config/mtjp_dataset.yaml
     """
     cfg = copy.deepcopy(_DEFAULTS)
-    # 优先使用显式指定路径，否则尝试默认路径
     candidate = path or _DEFAULT_CONFIG_PATH
     if candidate and os.path.exists(candidate):
         with open(candidate, "r", encoding="utf-8") as f:
@@ -396,29 +432,26 @@ def build_sequences(
     for sidx, grp in window_df.groupby("sample_idx", sort=True):
         grp = grp.sort_values("window_idx").reset_index(drop=True)
         n   = len(grp)
-        # 需要至少 seq_len 步历史 + 1 步未来目标
         if n < seq_len + 1:
             continue
 
-        feat_mat = grp[all_feat_cols].to_numpy(dtype=np.float32)  # (n, 17)
+        feat_mat = grp[all_feat_cols].to_numpy(dtype=np.float32)
         ya_arr   = grp["ad_norm"].to_numpy(dtype=np.float32)
         yr_arr   = grp["R_star"].to_numpy(dtype=np.float32)
         yc_arr   = grp["risk_cls"].to_numpy(dtype=np.int64)
         fl_arr   = grp["field_label"].to_numpy(dtype=np.int32)
         wi_arr   = grp["window_idx"].to_numpy(dtype=np.int32)
 
-        # t 为历史序列末尾索引，t+1 为预测目标
-        # t 范围：[seq_len-1, n-2]，确保 t+1 ≤ n-1
         for t in range(seq_len - 1, n - 1):
             target = t + 1
-            X_list.append(feat_mat[t - seq_len + 1: t + 1])   # (seq_len, 17)
+            X_list.append(feat_mat[t - seq_len + 1: t + 1])
             ya_list.append(ya_arr[target])
             yr_list.append(yr_arr[target])
             yc_list.append(yc_arr[target])
             meta_list.append({
                 "sample_idx":  int(sidx),
-                "window_idx":  int(wi_arr[target]),   # 目标步索引
-                "field_label": int(fl_arr[target]),   # 目标步场景
+                "window_idx":  int(wi_arr[target]),
+                "field_label": int(fl_arr[target]),
             })
 
     X          = np.stack(X_list,  axis=0).astype(np.float32)
@@ -451,9 +484,6 @@ def stratified_split(
     """
     按 sample_idx（驾驶人）分层划分，保证三组基准能力比例在 train/val/test 中均衡。
     分层依据：各驾驶人平均 ad_norm 三等分为高/中/低组，组内独立随机分配。
-
-    Returns:
-        train_mask, val_mask, test_mask : bool ndarray (N,)
     """
     rng = np.random.default_rng(seed)
 
@@ -491,7 +521,7 @@ def stratified_split(
 
 
 # =============================================================================
-# 6. Z-score 标准化（统计量来自训练集）
+# 6. Z-score 标准化（统计量来自增强后训练集）
 # =============================================================================
 
 def zscore_normalize(
@@ -507,7 +537,7 @@ def zscore_normalize(
     X_tr_flat = X_train.reshape(-1, D)
     mu        = X_tr_flat.mean(axis=0)
     sigma     = X_tr_flat.std(axis=0) + 1e-8
-    mu[-1]    = 0.0   # F_S 不标准化
+    mu[-1]    = 0.0
     sigma[-1] = 1.0
 
     def _apply(X):
@@ -562,29 +592,60 @@ def main():
     )
     parser.add_argument(
         "-c", "--config", type=str, default=None,
-        help=f"YAML 配置文件路径（默认: config/dataset.yaml）",
+        help="YAML 配置文件路径（默认: config/mtjp_dataset.yaml）",
     )
-    parser.add_argument("--seq_len",    type=int,  default=None, help="历史步数 T（覆盖 yaml model.seq_len）")
-    parser.add_argument("--seed",       type=int,  default=None, help="随机种子（覆盖 yaml split.seed）")
-    parser.add_argument("--no_zscore",  action="store_true",     help="禁用 Z-score 标准化")
-    parser.add_argument("--output_pkl", type=str,  default=None, help="输出 pkl 路径")
+    parser.add_argument("--seq_len",     type=int,  default=None, help="历史步数 T（覆盖 yaml model.seq_len）")
+    parser.add_argument("--seed",        type=int,  default=None, help="随机种子（覆盖 yaml split.seed）")
+    parser.add_argument("--no_zscore",   action="store_true",     help="禁用 Z-score 标准化")
+    parser.add_argument("--no_augment",  action="store_true",     help="禁用数据增强（覆盖 yaml augmentation.enabled）")
+    parser.add_argument("--output_pkl",  type=str,  default=None, help="输出 pkl 路径")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    if args.seq_len    is not None: cfg["model"]["seq_len"]        = args.seq_len
-    if args.seed       is not None: cfg["split"]["seed"]           = args.seed
-    if args.no_zscore:              cfg["normalization"]["zscore"] = False
-    if args.output_pkl:             cfg["paths"]["output_pkl"]     = args.output_pkl
+    if args.seq_len   is not None: cfg["model"]["seq_len"]           = args.seq_len
+    if args.seed      is not None: cfg["split"]["seed"]              = args.seed
+    if args.no_zscore:             cfg["normalization"]["zscore"]    = False
+    if args.no_augment:            cfg["augmentation"]["enabled"]    = False
+    if args.output_pkl:            cfg["paths"]["output_pkl"]        = args.output_pkl
+
+    # ========== 新增：动态拼接增强参数到文件名 ==========
+    if not args.output_pkl:  # 仅当用户未指定输出路径时自动拼接
+        aug_cfg = cfg["augmentation"]
+        aug_params = []
+        
+        # 核心增强开关
+        aug_params.append(f"aug-{aug_cfg['enabled']}")
+        if aug_cfg['enabled']:
+            # 仅训练集增强
+            aug_params.append(f"onlyTrain-{aug_cfg['only_on_train']}")
+            # 各增强方法的关键参数（仅启用的方法才加）
+            methods = aug_cfg["methods"]
+            if methods["gaussian_noise"]["enabled"]:
+                aug_params.append(f"gaussStd-{methods['gaussian_noise']['std_scale']}")
+            if methods["time_warp"]["enabled"]:
+                aug_params.append(f"timeWarpSigma-{methods['time_warp']['sigma']}")
+            if methods["feature_dropout"]["enabled"]:
+                aug_params.append(f"featDrop-{methods['feature_dropout']['drop_prob']}")
+            if methods["magnitude_warp"]["enabled"]:
+                aug_params.append(f"magWarpSigma-{methods['magnitude_warp']['sigma']}")
+        
+        # 拼接参数并生成最终文件名
+        param_suffix = "_".join(aug_params)
+        cfg["paths"]["output_pkl"] = f"{cfg['paths']['output_pkl']}_{param_suffix}.pkl"
+        cfg["paths"]["output_stats"] = f"{cfg['paths']['output_stats']}_{param_suffix}.csv"
+    # ==================================================
 
     seq_len   = cfg["model"]["seq_len"]
     win_sec   = cfg["window"]["window_seconds"]
     history_s = seq_len * win_sec
+    do_aug    = cfg["augmentation"].get("enabled", False)
 
     print("=" * 65)
     print("MT-JP 联合预测模型 — 数据集构建")
     print(f"  历史长度:  T={seq_len} 步 × {win_sec}s = {history_s}s")
     print(f"  预测目标:  未来 {win_sec}s（下一步）")
     print(f"  zscore  :  {cfg['normalization']['zscore']}")
+    print(f"  数据增强:  {'开启' if do_aug else '关闭'}")
     print("=" * 65)
 
     # ── Step 1: 加载三路数据源 ─────────────────────────────────
@@ -622,6 +683,49 @@ def main():
         cfg["split"]["seed"],
     )
 
+    X_tr = X[train_mask];  ya_tr = y_ability[train_mask]
+    yr_tr = y_risk_reg[train_mask]; yc_tr = y_risk_cls[train_mask]
+    meta_tr = meta_df[train_mask].reset_index(drop=True)
+
+    X_va = X[val_mask];    ya_va = y_ability[val_mask]
+    yr_va = y_risk_reg[val_mask];  yc_va = y_risk_cls[val_mask]
+    meta_va = meta_df[val_mask].reset_index(drop=True)
+
+    X_te = X[test_mask];   ya_te = y_ability[test_mask]
+    yr_te = y_risk_reg[test_mask]; yc_te = y_risk_cls[test_mask]
+    meta_te = meta_df[test_mask].reset_index(drop=True)
+
+    # ── Step 4.5: 数据增强（在标准化前，仅对训练集）──────────
+    if do_aug:
+        print("\n[AUG] 数据增强（Z-score 标准化前）...")
+        # 延迟导入，避免非增强模式也加载模块
+        from src.models.augment import Augmentor
+        aug = Augmentor(cfg["augmentation"], seed=cfg["split"]["seed"])
+        # 保存原始训练集长度，用于后续meta扩充
+        orig_len = len(X_tr)
+        X_tr, ya_tr, yr_tr, yc_tr = aug.apply(
+            X_tr, ya_tr, yr_tr, yc_tr, split="train"
+        )
+        # meta_tr 扩充（修复核心逻辑）
+        n_aug = len(ya_tr) - orig_len
+        if n_aug > 0:
+            # 方法1：为增强样本复制原始meta（循环填充至n_aug个）
+            aug_meta_rows = []
+            for i in range(n_aug):
+                # 循环取原始meta的行，保证每个增强样本都有对应meta
+                orig_idx = i % orig_len
+                aug_meta_rows.append(meta_tr.iloc[orig_idx].to_dict())
+            # 转为DataFrame并标记为增强样本
+            aug_meta_df = pd.DataFrame(aug_meta_rows)
+            aug_meta_df["augmented"] = True
+            # 原始样本标记为非增强
+            meta_tr["augmented"] = False
+            # 合并原始meta和增强meta
+            meta_tr = pd.concat([meta_tr, aug_meta_df], ignore_index=True)
+        print(f"    增强后训练集: X_tr={X_tr.shape}")
+    else:
+        print("\n[AUG] 数据增强已关闭，跳过")
+
     # ── Step 5: 标准化 ─────────────────────────────────────────
     feat_cols_17 = [
         "steer_angle", "steer_vel", "brake", "throttle",
@@ -633,11 +737,8 @@ def main():
 
     if cfg["normalization"]["zscore"]:
         print("\n[6/6] Z-score 标准化（统计量来自训练集，F_S 不参与）...")
-        X_tr, X_va, X_te, mu, sigma = zscore_normalize(
-            X[train_mask], X[val_mask], X[test_mask]
-        )
+        X_tr, X_va, X_te, mu, sigma = zscore_normalize(X_tr, X_va, X_te)
     else:
-        X_tr, X_va, X_te = X[train_mask], X[val_mask], X[test_mask]
         mu    = np.zeros(X.shape[-1], dtype=np.float32)
         sigma = np.ones(X.shape[-1],  dtype=np.float32)
 
@@ -645,24 +746,24 @@ def main():
     splits = {
         "train": {
             "X":          X_tr,
-            "y_ability":  y_ability[train_mask],
-            "y_risk_reg": y_risk_reg[train_mask],
-            "y_risk_cls": y_risk_cls[train_mask],
-            "meta":       meta_df[train_mask].reset_index(drop=True),
+            "y_ability":  ya_tr,
+            "y_risk_reg": yr_tr,
+            "y_risk_cls": yc_tr,
+            "meta":       meta_tr,
         },
         "val": {
             "X":          X_va,
-            "y_ability":  y_ability[val_mask],
-            "y_risk_reg": y_risk_reg[val_mask],
-            "y_risk_cls": y_risk_cls[val_mask],
-            "meta":       meta_df[val_mask].reset_index(drop=True),
+            "y_ability":  ya_va,
+            "y_risk_reg": yr_va,
+            "y_risk_cls": yc_va,
+            "meta":       meta_va,
         },
         "test": {
             "X":          X_te,
-            "y_ability":  y_ability[test_mask],
-            "y_risk_reg": y_risk_reg[test_mask],
-            "y_risk_cls": y_risk_cls[test_mask],
-            "meta":       meta_df[test_mask].reset_index(drop=True),
+            "y_ability":  ya_te,
+            "y_risk_reg": yr_te,
+            "y_risk_cls": yc_te,
+            "meta":       meta_te,
         },
     }
 
@@ -686,6 +787,7 @@ def main():
     print(f"\n  输入维度:  X = (N, T={seq_len}, D=17)  [{history_s}s 历史]")
     print(f"  预测目标:  y_*(N,)  对应未来 {win_sec}s 窗口")
     print(f"  标签类型:  y_ability(float32) / y_risk_reg(float32) / y_risk_cls(int64)")
+    print(f"  输出目录:  {os.path.dirname(cfg['paths']['output_pkl'])}")
     print("=" * 65)
 
 

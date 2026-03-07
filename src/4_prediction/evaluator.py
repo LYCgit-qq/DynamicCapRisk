@@ -16,7 +16,7 @@ MT-JP 模型评估器
 
 用法：
   python evaluator.py
-  python evaluator.py -c config/evaluator.yaml
+  python evaluator.py -c config/mtjp_evaluator.yaml
   python evaluator.py --ckpt output/3_prediction/checkpoints/best_model.pt
 """
 
@@ -37,7 +37,7 @@ from typing import Dict, Optional, Tuple
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mtjp_model import build_model
+from src.models.mtjp_model import build_model
 from trainer import MTJPDataset
 
 
@@ -61,7 +61,7 @@ _DEFAULTS = {
 }
 
 _DEFAULT_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "evaluator.yaml"
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "mtjp_evaluator.yaml"
 )
 
 
@@ -475,7 +475,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("-c", "--config", type=str, default=None,
-                        help="YAML 配置文件路径（默认: config/evaluator.yaml）")
+                        help="YAML 配置文件路径（默认: config/mtjp_evaluator.yaml）")
     parser.add_argument("--ckpt",    type=str, default=None,
                         help="模型检查点路径（覆盖 yaml paths.ckpt）")
     parser.add_argument("--split",   type=str, default=None,
