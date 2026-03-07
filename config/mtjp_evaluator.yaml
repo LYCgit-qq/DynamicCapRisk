@@ -1,0 +1,17 @@
+# ============================================================
+# MT-JP 联合预测模型 — 评估器配置
+# 对应脚本: src/4_prediction/evaluator.py
+# ============================================================
+
+paths:
+  dataset_pkl: "output/3_prediction/mtjp_dataset.pkl"
+  ckpt:        "output/3_prediction/checkpoints/best_model.pt"
+  output_dir:  "output/3_prediction/evaluation"
+
+eval:
+  batch_size:        256
+  split:             "test"    # train / val / test
+  risk_thresh_high:  0.1       # R* > 0.1 视为高风险（图5.8 阈值线）
+  risk_thresh_low:  -0.1       # R* < -0.1 视为低风险
+
+class_names: ["低风险", "中风险", "高风险"]

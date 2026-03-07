@@ -1,0 +1,51 @@
+# ============================================================
+# MT-JP 联合预测模型 — 训练器配置
+# 对应脚本: src/4_prediction/trainer.py
+# ============================================================
+
+paths:
+  dataset_pkl: "output/3_prediction/mtjp_dataset.pkl"
+  output_dir:  "output/3_prediction/checkpoints"
+  log_csv:     "output/3_prediction/train_log.csv"
+
+model:
+  seq_len:    5        # 历史步数 T（需与 dataset.yaml model.seq_len 一致）
+  d_model:    128      # Transformer 隐藏维度
+  nhead:      8        # 多头注意力头数
+  num_layers: 4        # 每个编码器的 Transformer 层数
+  ffn_dim:    512      # 前馈网络维度
+  dropout:    0.2      # Dropout 率
+  n_classes:  3        # 风险等级分类数 {低,中,高}
+
+train:
+  batch_size:  64      # 批次大小（表5.3）
+  max_epochs:  150     # 最大训练轮数（表5.3）
+  patience:    15      # 早停轮数（表5.3）
+  grad_clip:   1.0     # 梯度裁剪（表5.3）
+  seed:        42      # 随机种子
+
+optimizer:
+  lr:           1.0e-4    # 初始学习率（表5.3）
+  weight_decay: 0.01      # 权重衰减（表5.3）
+  betas: [0.9, 0.999]     # AdamW β系数（表5.3）
+
+scheduler:
+  T_0:     20      # CosineAnnealingWarmRestarts 周期（论文 §5.3.1）
+  eta_min: 1.0e-6  # 最小学习率
+
+loss:
+  # 损失权重（论文 §5.2.2 通过网格搜索确定）
+  lambda_ability:     1.0
+  lambda_risk_reg:    1.0
+  lambda_risk_cls:    0.5
+  lambda_consistency: 0.3
+
+  # Huber 损失阈值 δ（§5.2.2）
+  huber_delta: 0.05
+
+  # 风险等级分类加权交叉熵权重 [低,中,高]（§5.2.2）
+  cls_weights: [1.0, 1.5, 2.0]
+
+  # TCI 一致性系数 R* = alpha·F_S - beta·(2·Ã_d - 1)（§5.2.2）
+  tci_alpha: 0.58
+  tci_beta:  0.42

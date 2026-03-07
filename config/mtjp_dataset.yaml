@@ -1,0 +1,39 @@
+# ============================================================
+# MT-JP 联合预测模型 — 数据集构建配置
+# 对应脚本: src/4_prediction/dataset.py
+# ============================================================
+
+paths:
+  raw_pkl:       "data/processed/raw_data.pkl"
+  cap_pkl:       "output/1_capability_assessment/Afl_capability_fluctuation.pkl"
+  risk_csv:      "output/2_risk_assessment/results/risk_windows_all.csv"
+  output_pkl:    "output/3_prediction/mtjp_dataset.pkl"
+  output_stats:  "output/3_prediction/mtjp_dataset_stats.csv"
+
+window:
+  window_seconds: 3       # 每个能力评估窗口时长 (s)
+  act_hz:  60             # 行为信号采样率 (Hz)
+  eye_hz: 120             # 眼动信号采样率 (Hz)
+  phy_hz: 100             # 生理信号采样率 (Hz)
+
+model:
+  seq_len: 5              # T：历史输入步数 = 5步 × 3s = 15s
+                          # 预测目标为第 seq_len+1 步（未来 3s）
+
+split:
+  # 按驾驶人(sample)分层划分，保证三组基准能力比例均衡
+  train_ratio: 0.70
+  val_ratio:   0.10
+  test_ratio:  0.20
+  seed: 42
+
+normalization:
+  zscore: true            # 对输入特征 X 做 Z-score（统计量仅来自训练集）
+                          # F_S(最后一维)已归一化至[0,1]，不参与标准化
+
+risk_level_map:
+  "低风险": 0
+  "中风险": 1
+  "高风险": 2
+
+n_samples: 67             # 驾驶人总数（与 capability_fluctuation.py 一致）
