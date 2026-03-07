@@ -1,0 +1,66 @@
+# ============================================================
+# risk_evaluator.yaml  —  风险度评估模块配置文件
+# ============================================================
+
+# ── 模型参数（来自论文校准结果） ──────────────────────────────
+model:
+  ad_min:       0.43    # A_d 样本最小值（归一化下界）
+  ad_max:       1.08    # A_d 样本最大值（归一化上界）
+  alpha:        0.58    # F_S 权重
+  beta:         0.42    # Ã_d 权重
+  # R* = 2R - 0.16，理论范围 [-1, 1]
+  thresh_high:  0.10    # 高风险阈值 θ
+  thresh_low:  -0.10    # 低风险阈值 -θ
+  fs_baseline:  0.10    # label=0 自由路段基线场强
+
+# ── 场景标签映射 ──────────────────────────────────────────────
+scenarios:
+  label_csv_map:
+    1: 'test00_risk_field.csv'
+    2: 'test01_risk_field.csv'
+    3: 'test02_risk_field.csv'
+  label_name:
+    0: '基线场景'
+    1: '施工区1'
+    2: '施工区2'
+    3: '施工区3'
+
+# ── 路径配置 ──────────────────────────────────────────────────
+paths:
+  field_pkl:   'output/1_capability_assessment/Afl_capability_fluctuation.pkl'
+  ad_pkl:      'output/1_capability_assessment/Ad_result.pkl'
+  fs_dir: "output/2_risk_assessment/results"  
+  output_csv: "output/2_risk_assessment/results"
+  output_fig: "output/2_risk_assessment/figures"
+
+# ── 可视化样式 ────────────────────────────────────────────────
+vis:
+  dpi: 180
+  font_sans_serif: ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
+
+  group_colors:
+    高能力组: '#2196F3'
+    中能力组: '#FF9800'
+    低能力组: '#F44336'
+
+  scene_bg_colors:
+    0: '#d0e8ff'
+    1: '#ffe0b2'
+    2: '#ffccbc'
+    3: '#ef9a9a'
+
+  risk_level_colors:
+    低风险: '#66BB6A'
+    中风险: '#FFA726'
+    高风险: '#EF5350'
+
+# ── 权重校准网格搜索 ──────────────────────────────────────────
+calibration:
+  alpha_range: [0.01, 0.99]   # 搜索范围 [lo, hi]
+  alpha_step:  0.01
+  ci_auc_drop: 0.01           # 95% CI 定义：AUC ≥ best_auc - ci_auc_drop
+
+# ── 阈值敏感性分析 ────────────────────────────────────────────
+threshold_search:
+  range: [0.05, 0.25]
+  step:  0.05

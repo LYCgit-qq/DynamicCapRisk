@@ -302,7 +302,7 @@ def validate_results(all_dynamic_cap, config):
 
 
 # ====================== 5. 结果保存 ======================
-def save_results(all_dynamic_cap, exp_dynamic_df, group_stats, validate_dict, config):
+def save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stats, validate_dict, config):
     out     = config["full_paths"]["output_dir"]
     ab_mode = config["calculation"].get("ab_mode", "Ab")
     prefix  = f"Ad_{ab_mode}"
@@ -336,7 +336,6 @@ def save_results(all_dynamic_cap, exp_dynamic_df, group_stats, validate_dict, co
         f.write(group_stats.to_string())
 
     # 保存 pkl（参考 Afl 格式）
-    dynamic_cap_sample = validate_dict.pop("sample_dynamic_capability", [])  # 从主函数传入
     ad_result = {
         "dynamic_capability":       all_dynamic_cap,      # 全局 Ad 数组
         "sample_dynamic_capability": dynamic_cap_sample,   # 各实验的 Ad 数组列表
@@ -367,6 +366,6 @@ if __name__ == "__main__":
 
     validate_dict = validate_results(all_dynamic_cap, config)
     visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, config)
-    save_results(all_dynamic_cap, exp_dynamic_df, group_stats, validate_dict, config)
-
+    save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stats, validate_dict, config)
+    
     print("\n===== 动态驾驶能力计算完成 =====")

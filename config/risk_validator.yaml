@@ -1,0 +1,46 @@
+# =============================================================================
+# risk_validator.yaml
+# R* 有效性验证模块配置文件
+# =============================================================================
+
+# ── 路径配置 ──────────────────────────────────────────────────────────────
+paths:
+  raw_pkl:    "D:/Local/DynamicCapRisk/data/processed/raw_data.pkl"
+  risk_csv:   "D:/Local/DynamicCapRisk/output/2_risk_assessment/results/risk_windows_all.csv"
+  summary_csv: "D:/Local/DynamicCapRisk/output/2_risk_assessment/results/risk_summary_by_sample.csv"
+  output_dir: "D:/Local/DynamicCapRisk/output/2_risk_assessment/validation"
+
+# ── 窗口参数（须与 capability_fluctuation.py 保持一致）──────────────────
+window:
+  window_seconds: 3       # 非重叠窗口时长（秒）
+  act_hz: 60              # act 信号采样率（Hz）
+  # 派生：window_size = window_seconds × act_hz = 180 帧
+
+# ── 异常事件检测阈值 ──────────────────────────────────────────────────────
+# 每个窗口内对应特征的均值超过阈值即触发该子事件
+# 若某类事件触发率过高/过低，可调整对应阈值
+event_thresholds:
+  hard_brake_thresh:   0.30     # 急刹车：刹车踏板开度均值（act[:,1]）
+  hard_accel_thresh:   0.75     # 急加速：油门踏板开度均值（act[:,0]）
+  sharp_steer_thresh:  15.0     # 急打方向：方向盘角速度绝对值均值（°/s）
+  lane_depart_thresh:  0.30     # 车道偏离：横向偏移绝对值均值（m，act[:,8]）
+  lat_accel_thresh:    1.50     # 横向超载：横向加速度绝对值均值（m/s²，act[:,5]）
+  lon_accel_thresh:    3.00     # 纵向超载：纵向加速度绝对值均值（m/s²，act[:,4]）
+
+# ── 风险等级顺序（用于卡方检验分组展示）────────────────────────────────
+risk_level_order:
+  - "低风险"
+  - "中风险"
+  - "高风险"
+
+# ── 图表输出配置 ──────────────────────────────────────────────────────────
+figure:
+  dpi: 150
+  figsize_roc:      [6, 5]    # ROC 曲线图尺寸
+  figsize_bar:      [6, 4]    # 风险等级柱状图尺寸
+  figsize_box:      [5, 5]    # R* 箱线图尺寸
+  color_low_risk:   "#4CAF50"
+  color_mid_risk:   "#FF9800"
+  color_high_risk:  "#F44336"
+  color_no_event:   "#90CAF9"
+  color_event:      "#EF9A9A"

@@ -266,7 +266,7 @@ def vif_filter(df, threshold=10):
 # ====================== 4. 权重计算 ======================
 def ahp_weights_adapted(save_path=None):
     """从CSV读取打分生成AHP权重"""
-    csv_path = "data/raw/ahp_judgment_matrix.csv"
+    csv_path = "data/raw/ahp_afl_judgment_matrix.csv"
     if save_path is None:
         save_path = "output/1_capability_assessment/Afl_ahp_weights.csv"
     ahp_weights = calculate_ahp_weights(csv_path=csv_path, save_path=save_path)
