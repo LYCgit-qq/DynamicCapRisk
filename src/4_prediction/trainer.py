@@ -19,7 +19,6 @@ import pickle
 import argparse
 import warnings
 import yaml
-import copy
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -37,76 +36,33 @@ from src.models.mtjp_model import MTJP, build_model
 
 
 # =============================================================================
-# 默认配置
+# 配置加载（仅从 YAML 加载，无内置默认）
 # =============================================================================
-
-_DEFAULTS = {
-    "paths": {
-        "dataset_pkl": "data/dataset/mtjp_dataset.pkl",
-        "runs_root":   "output/3_prediction/runs",   # 所有运行的根目录
-    },
-    "model": {
-        "seq_len":    5,
-        "d_model":    128,
-        "nhead":      8,
-        "num_layers": 4,
-        "ffn_dim":    512,
-        "dropout":    0.2,
-        "n_classes":  3,
-    },
-    "train": {
-        "batch_size":    64,
-        "max_epochs":    150,
-        "patience":      15,
-        "grad_clip":     1.0,
-        "seed":          42,
-    },
-    "optimizer": {
-        "lr":            1e-4,
-        "weight_decay":  0.01,
-        "betas":         [0.9, 0.999],
-    },
-    "scheduler": {
-        "T_0":           20,
-        "eta_min":       1e-6,
-    },
-    "loss": {
-        "lambda_ability":     1.0,
-        "lambda_risk_reg":    1.0,
-        "lambda_risk_cls":    0.5,
-        "lambda_consistency": 0.3,
-        "huber_delta":        0.05,
-        "cls_weights":        [1.0, 1.5, 2.0],
-        "tci_alpha":          0.58,
-        "tci_beta":           0.42,
-    },
-}
 
 _DEFAULT_CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "mtjp_trainer.yaml"
 )
 
-
-def _deep_merge(base: dict, override: dict) -> dict:
-    result = base.copy()
-    for k, v in override.items():
-        if isinstance(v, dict) and isinstance(result.get(k), dict):
-            result[k] = _deep_merge(result[k], v)
-        else:
-            result[k] = v
-    return result
-
-
 def load_config(path: Optional[str] = None) -> dict:
-    cfg = copy.deepcopy(_DEFAULTS)
+    """
+    加载配置：
+      1. 优先使用指定的 path
+      2. 未指定则使用默认路径 config/mtjp_trainer.yaml
+      3. 配置文件不存在则抛出异常（无内置默认配置）
+    """
     candidate = path or _DEFAULT_CONFIG_PATH
-    if candidate and os.path.exists(candidate):
-        with open(candidate, "r", encoding="utf-8") as f:
-            user = yaml.safe_load(f) or {}
-        cfg = _deep_merge(cfg, user)
-        print(f"已加载配置文件: {os.path.abspath(candidate)}")
-    else:
-        print("使用内置默认配置" + (f"（{candidate} 不存在）" if candidate else ""))
+    if not os.path.exists(candidate):
+        raise FileNotFoundError(
+            f"配置文件不存在！\n"
+            f"指定路径: {path}\n"
+            f"默认路径: {_DEFAULT_CONFIG_PATH}\n"
+            "请确保 YAML 配置文件存在后再运行"
+        )
+    
+    with open(candidate, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+    
+    print(f"已加载配置文件: {os.path.abspath(candidate)}")
     return cfg
 
 
@@ -160,7 +116,7 @@ def save_run_config(cfg: dict, path: str) -> None:
 # =============================================================================
 
 class MTJPDataset(Dataset):
-    """从 mtjp_dataset.pkl 的单个 split 构建 PyTorch Dataset。"""
+    """从 mtjp_dataset_aug-False.pkl 的单个 split 构建 PyTorch Dataset。"""
 
     def __init__(self, split_data: dict):
         self.X          = torch.from_numpy(split_data["X"]).float()

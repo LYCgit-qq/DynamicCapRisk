@@ -26,7 +26,6 @@ import pickle
 import argparse
 import warnings
 import yaml
-import copy
 import numpy as np
 import pandas as pd
 import torch
@@ -45,46 +44,31 @@ from trainer import MTJPDataset
 # 默认配置
 # =============================================================================
 
-_DEFAULTS = {
-    "paths": {
-        "dataset_pkl":  "output/3_prediction/mtjp_dataset.pkl",
-        "ckpt":         "output/3_prediction/checkpoints/best_model.pt",
-        "output_dir":   "output/3_prediction/evaluation",
-    },
-    "eval": {
-        "batch_size":   256,
-        "split":        "test",      # train / val / test
-        "risk_thresh_high": 0.1,     # R* > 0.1 视为高风险（与论文图5.8阈值线一致）
-        "risk_thresh_low": -0.1,     # R* < -0.1 视为低风险
-    },
-    "class_names": ["低风险", "中风险", "高风险"],
-}
-
 _DEFAULT_CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "mtjp_evaluator.yaml"
 )
 
 
-def _deep_merge(base: dict, override: dict) -> dict:
-    result = base.copy()
-    for k, v in override.items():
-        if isinstance(v, dict) and isinstance(result.get(k), dict):
-            result[k] = _deep_merge(result[k], v)
-        else:
-            result[k] = v
-    return result
-
-
 def load_config(path: Optional[str] = None) -> dict:
-    cfg = copy.deepcopy(_DEFAULTS)
+    """
+    加载配置：
+      1. 优先使用指定的 path
+      2. 未指定则使用默认路径 config/mtjp_evaluator.yaml
+      3. 配置文件不存在则抛出异常（无内置默认配置）
+    """
     candidate = path or _DEFAULT_CONFIG_PATH
-    if candidate and os.path.exists(candidate):
-        with open(candidate, "r", encoding="utf-8") as f:
-            user = yaml.safe_load(f) or {}
-        cfg = _deep_merge(cfg, user)
-        print(f"已加载配置文件: {os.path.abspath(candidate)}")
-    else:
-        print("使用内置默认配置")
+    if not os.path.exists(candidate):
+        raise FileNotFoundError(
+            f"配置文件不存在！\n"
+            f"指定路径: {path}\n"
+            f"默认路径: {_DEFAULT_CONFIG_PATH}\n"
+            "请确保 YAML 配置文件存在后再运行"
+        )
+    
+    with open(candidate, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+    
+    print(f"已加载配置文件: {os.path.abspath(candidate)}")
     return cfg
 
 
