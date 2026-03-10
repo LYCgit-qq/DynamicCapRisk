@@ -1,0 +1,32 @@
+# ============================================================
+# SVR / CART 传统机器学习基线 — 训练器配置
+# 对应脚本: src/4_prediction/trainer_svr_cart.py
+#
+# 用法：
+#   python trainer_svr_cart.py              # 训练 YAML 指定的模型
+#   python trainer_svr_cart.py --model svr  # 命令行指定 SVR
+#   python trainer_svr_cart.py --model cart # 命令行指定 CART
+# ============================================================
+
+# -------------------------- 模型选择 --------------------------
+model_type: "cart"    # 可选: svr | cart（命令行 --model 可覆盖）
+
+# -------------------------- 路径配置 --------------------------
+paths:
+  dataset_pkl: "data/dataset/dataset_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.pkl"
+  runs_root:   "output/3_prediction/runs"
+
+# -------------------------- SVR 参数 --------------------------
+# 论文对比配置：RBF 核，通过网格搜索确定超参数
+svr:
+  kernel:  "rbf"    # 核函数：rbf（高斯核）
+  C:       10.0     # 正则化常数（惩罚系数）
+  gamma:   "scale"  # 核系数（scale = 1/(n_features * X.var())）
+  epsilon: 0.05     # ε-不敏感损失阈值
+
+# -------------------------- CART 参数 --------------------------
+# 论文对比配置：最大深度 10，最小分割样本数 5
+cart:
+  max_depth:         10   # 树的最大深度（None=不限）
+  min_samples_split: 5    # 节点分割最小样本数
+  seed:              42   # 随机种子（保证可复现）

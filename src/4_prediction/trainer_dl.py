@@ -1,14 +1,21 @@
-# D:\Local\DynamicCapRisk\src\4_prediction\trainer.py
-
+# src/4_prediction/trainer.py
 """
-MT-JP 模型训练器
+MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型训练器
 
-输出目录：
-  output/3_prediction/runs/
+通过 YAML 配置文件中的 model.model_type 字段选择模型：
+  - mtjp      : Multi-Task Joint Prediction（默认）
+  - lstm      : 2-层 LSTM 多任务基线
+  - gru       : 2-层 GRU 多任务基线
+  - cnn_lstm  : CNN-LSTM 混合多任务基线
+
+输出目录：output/3_prediction/runs/
 
 用法：
   python trainer.py
-  python trainer.py -c config/mtjp_trainer.yaml
+  python trainer.py -c config/trainer_dl.yaml
+  python trainer.py --model_type lstm
+  python trainer.py --model_type gru   --lr 5e-4
+  python trainer.py --model_type cnn_lstm
   多次训练对比：tensorboard --logdir output/3_prediction/runs
 """
 
@@ -32,7 +39,8 @@ warnings.filterwarnings("ignore")
 
 # 允许从同级目录导入
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from src.models.mtjp_model import MTJP, build_model
+from src.models.mtjp_model import MTJP, build_model  as _build_mtjp
+from src.models.baseline_models import build_baseline_model
 
 
 # =============================================================================
@@ -40,14 +48,14 @@ from src.models.mtjp_model import MTJP, build_model
 # =============================================================================
 
 _DEFAULT_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "mtjp_trainer.yaml"
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "trainer_dl.yaml"
 )
 
 def load_config(path: Optional[str] = None) -> dict:
     """
     加载配置：
       1. 优先使用指定的 path
-      2. 未指定则使用默认路径 config/mtjp_trainer.yaml
+      2. 未指定则使用默认路径 config/trainer_dl.yaml
       3. 配置文件不存在则抛出异常（无内置默认配置）
     """
     candidate = path or _DEFAULT_CONFIG_PATH
@@ -58,38 +66,59 @@ def load_config(path: Optional[str] = None) -> dict:
             f"默认路径: {_DEFAULT_CONFIG_PATH}\n"
             "请确保 YAML 配置文件存在后再运行"
         )
-    
     with open(candidate, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
-    
     print(f"已加载配置文件: {os.path.abspath(candidate)}")
     return cfg
+
+
+# =============================================================================
+# 模型工厂（统一入口）
+# =============================================================================
+
+_DL_BASELINES = {"lstm", "gru", "cnn_lstm"}
+
+
+def build_model(cfg: dict) -> nn.Module:
+    """
+    根据 cfg["model"]["model_type"] 分发到对应的模型构建函数。
+    model_type 不区分大小写。
+    """
+    model_type = cfg["model"].get("model_type", "mtjp").lower()
+    if model_type == "mtjp":
+        return _build_mtjp(cfg)
+    elif model_type in _DL_BASELINES:
+        return build_baseline_model(cfg)
+    else:
+        raise ValueError(
+            f"未知 model_type='{model_type}'，"
+            f"可选值: mtjp / lstm / gru / cnn_lstm\n"
+            "（SVR / CART 请使用独立脚本 trainer_svr_cart.py）"
+        )
 
 
 # =============================================================================
 # 运行目录管理
 # =============================================================================
 
-def make_run_dir(runs_root: str, timestamp: str) -> dict:
+def make_run_dir(runs_root: str, timestamp: str, model_type: str) -> dict:
     """
-    在 runs_root 下创建本次运行的独立目录，返回各文件路径字典。
+    在 runs_root 下创建本次运行的独立目录，目录名含模型类型便于区分。
 
     目录结构：
       runs_root/
-      └── {timestamp}/
+      └── {timestamp}_{model_type}/
           ├── best_model.pt
           ├── final_model.pt
           ├── train_log.csv
           ├── run_config.yaml
-          └── events.out.tfevents... (TensorBoard日志直接存在这里)
+          └── events.out.tfevents... (TensorBoard 日志)
     """
-    run_dir = os.path.join(runs_root, timestamp)
+    run_dir = os.path.join(runs_root, f"{timestamp}_{model_type}")
     os.makedirs(run_dir, exist_ok=True)
-    
-    # 修改1：去掉单独的 tb_logs 文件夹，直接将 tb_dir 指向 run_dir
     return {
         "run_dir":    run_dir,
-        "tb_dir":     run_dir, 
+        "tb_dir":     run_dir,
         "best_ckpt":  os.path.join(run_dir, "best_model.pt"),
         "final_ckpt": os.path.join(run_dir, "final_model.pt"),
         "log_csv":    os.path.join(run_dir, "train_log.csv"),
@@ -115,8 +144,8 @@ def save_run_config(cfg: dict, path: str) -> None:
 # Dataset
 # =============================================================================
 
-class MTJPDataset(Dataset):
-    """从 mtjp_dataset_aug-False.pkl 的单个 split 构建 PyTorch Dataset。"""
+class TorchDataset(Dataset):
+    """从 dataset_aug-False.pkl 的单个 split 构建 PyTorch Dataset。"""
 
     def __init__(self, split_data: dict):
         self.X          = torch.from_numpy(split_data["X"]).float()
@@ -150,7 +179,7 @@ def build_dataloaders(
     g.manual_seed(seed)
 
     def _loader(split_name, shuffle):
-        ds = MTJPDataset(data[split_name])
+        ds = TorchDataset(data[split_name])
         return DataLoader(
             ds,
             batch_size  = batch_size,
@@ -172,7 +201,11 @@ def build_dataloaders(
 # =============================================================================
 
 class MTJPLoss(nn.Module):
-    """联合损失函数（论文 §5.2.2）"""
+    """
+    联合损失函数（论文 §5.2.2）。
+    所有多任务深度学习模型（MT-JP / LSTM / GRU / CNN-LSTM）共用此损失，
+    保证对比实验公平性。
+    """
 
     def __init__(self, loss_cfg: dict, device: torch.device):
         super().__init__()
@@ -268,7 +301,7 @@ def _run_epoch(
     with ctx:
         for X, ya, yr, yc in loader:
             X, ya, yr, yc = X.to(device), ya.to(device), yr.to(device), yc.to(device)
-            f_s = X[:, -1, 16]
+            f_s = X[:, -1, 16]   # 环境特征 F_S（最后时间步，第17维）
 
             outputs = model(X)
             loss, loss_dict = criterion(outputs, ya, yr, yc, f_s)
@@ -291,12 +324,14 @@ def _run_epoch(
 # =============================================================================
 
 def train(cfg: dict) -> None:
-    # ── 生成时间戳，创建本次运行独立目录 ─────────────────────
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_paths = make_run_dir(cfg["paths"]["runs_root"], timestamp)
-    print(f"\n  本次运行目录: {run_paths['run_dir']}")
+    model_type = cfg["model"].get("model_type", "mtjp").lower()
 
-    # 保存本次配置快照
+    # ── 生成时间戳，创建本次运行独立目录 ─────────────────────
+    timestamp  = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_paths  = make_run_dir(cfg["paths"]["runs_root"], timestamp, model_type)
+    print(f"\n  模型类型    : {model_type.upper()}")
+    print(f"  本次运行目录: {run_paths['run_dir']}")
+
     save_run_config(cfg, run_paths["run_config"])
     print(f"  配置快照已保存: {run_paths['run_config']}")
 
@@ -320,7 +355,7 @@ def train(cfg: dict) -> None:
     )
 
     # ── 模型 ──────────────────────────────────────────────────
-    print("\n[2/4] 构建模型...")
+    print(f"\n[2/4] 构建模型 [{model_type.upper()}]...")
     model = build_model(cfg).to(device)
     print(f"  总参数量: {model.count_parameters():,}")
     try:
@@ -330,16 +365,16 @@ def train(cfg: dict) -> None:
         pass
 
     # ── 损失 / 优化器 / 调度器 ────────────────────────────────
-    criterion  = MTJPLoss(cfg["loss"], device)
-    opt_cfg    = cfg["optimizer"]
-    optimizer  = torch.optim.AdamW(
+    criterion = MTJPLoss(cfg["loss"], device)
+    opt_cfg   = cfg["optimizer"]
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr           = opt_cfg["lr"],
         weight_decay = opt_cfg["weight_decay"],
         betas        = tuple(opt_cfg["betas"]),
     )
-    sched_cfg  = cfg["scheduler"]
-    scheduler  = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+    sched_cfg = cfg["scheduler"]
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
         T_0     = sched_cfg["T_0"],
         eta_min = sched_cfg["eta_min"],
@@ -368,23 +403,18 @@ def train(cfg: dict) -> None:
         lr_now  = scheduler.get_last_lr()[0]
 
         # ── TensorBoard 记录 ──────────────────────────────────
-        # 改用 add_scalar 单数形式，避免创建任何子文件夹，所有数据写入同一个 event 文件
-        writer.add_scalar("Loss_train/total", tr_losses["total"], epoch)
-        writer.add_scalar("Loss_val/total",   va_losses["total"], epoch)
-
-        writer.add_scalar("Loss_train/ability", tr_losses["ability"], epoch)
-        writer.add_scalar("Loss_val/ability",   va_losses["ability"], epoch)
-
-        writer.add_scalar("Loss_train/risk_reg", tr_losses["risk_reg"], epoch)
-        writer.add_scalar("Loss_val/risk_reg",   va_losses["risk_reg"], epoch)
-
-        writer.add_scalar("Loss_train/risk_cls", tr_losses["risk_cls"], epoch)
-        writer.add_scalar("Loss_val/risk_cls",   va_losses["risk_cls"], epoch)
-
+        writer.add_scalar("Loss_train/total",       tr_losses["total"],       epoch)
+        writer.add_scalar("Loss_val/total",         va_losses["total"],       epoch)
+        writer.add_scalar("Loss_train/ability",     tr_losses["ability"],     epoch)
+        writer.add_scalar("Loss_val/ability",       va_losses["ability"],     epoch)
+        writer.add_scalar("Loss_train/risk_reg",    tr_losses["risk_reg"],    epoch)
+        writer.add_scalar("Loss_val/risk_reg",      va_losses["risk_reg"],    epoch)
+        writer.add_scalar("Loss_train/risk_cls",    tr_losses["risk_cls"],    epoch)
+        writer.add_scalar("Loss_val/risk_cls",      va_losses["risk_cls"],    epoch)
         writer.add_scalar("Loss_train/consistency", tr_losses["consistency"], epoch)
         writer.add_scalar("Loss_val/consistency",   va_losses["consistency"], epoch)
-
         writer.add_scalar("LR", lr_now, epoch)
+
         grad_norm = sum(
             p.grad.data.norm(2).item() ** 2
             for p in model.parameters() if p.grad is not None
@@ -398,6 +428,7 @@ def train(cfg: dict) -> None:
                 {
                     "epoch":       epoch,
                     "timestamp":   timestamp,
+                    "model_type":  model_type,
                     "model_state": model.state_dict(),
                     "val_loss":    best_val_loss,
                     "cfg":         cfg,
@@ -408,7 +439,7 @@ def train(cfg: dict) -> None:
         else:
             ckpt_mark = ""
 
-        # ── CSV 日志（每 epoch 实时刷新，中断也不丢数据）──────
+        # ── CSV 日志 ──────────────────────────────────────────
         log_rows.append({
             "epoch":       epoch,
             "lr":          f"{lr_now:.2e}",
@@ -445,6 +476,7 @@ def train(cfg: dict) -> None:
         {
             "epoch":       epoch,
             "timestamp":   timestamp,
+            "model_type":  model_type,
             "model_state": model.state_dict(),
             "cfg":         cfg,
         },
@@ -470,10 +502,11 @@ def train(cfg: dict) -> None:
     # ── TensorBoard 超参数 & 最终指标 ─────────────────────────
     writer.add_hparams(
         hparam_dict={
+            "model_type":         model_type,
             "lr":                 cfg["optimizer"]["lr"],
             "batch_size":         cfg["train"]["batch_size"],
-            "d_model":            cfg["model"]["d_model"],
-            "num_layers":         cfg["model"]["num_layers"],
+            "d_model":            cfg["model"].get("d_model", 0),
+            "num_layers":         cfg["model"].get("num_layers", cfg["model"].get("baseline_num_layers", 0)),
             "dropout":            cfg["model"]["dropout"],
             "lambda_ability":     cfg["loss"]["lambda_ability"],
             "lambda_risk_reg":    cfg["loss"]["lambda_risk_reg"],
@@ -487,12 +520,12 @@ def train(cfg: dict) -> None:
             "hparam/test_risk_reg": te_losses["risk_reg"],
             "hparam/test_risk_cls": te_losses["risk_cls"],
         },
-        run_name="."  # 修改2：强制保存在当前目录，防止生成额外的子文件夹
+        run_name="."
     )
     writer.close()
 
     print(f"\n{'='*60}")
-    print(f"训练完成  [{timestamp}]")
+    print(f"训练完成  [{model_type.upper()}  {timestamp}]")
     print(f"  本次运行目录  : {run_paths['run_dir']}")
     print(f"  最优验证集损失: {best_val_loss:.6f}")
     print(f"  查看本次曲线  : tensorboard --logdir {run_paths['tb_dir']}")
@@ -506,33 +539,46 @@ def train(cfg: dict) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="MT-JP 联合预测模型训练",
+        description="MT-JP / LSTM / GRU / CNN-LSTM 多任务联合预测模型训练器",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python trainer.py                              # 使用默认 YAML，默认模型(mtjp)
+  python trainer.py --model_type lstm            # 切换为 LSTM 基线
+  python trainer.py --model_type gru  --lr 5e-4  # GRU + 自定义学习率
+  python trainer.py --model_type cnn_lstm
+        """,
     )
-    parser.add_argument("-c", "--config",  type=str,   default=None,
-                        help="YAML 配置文件路径（默认: config/mtjp_trainer.yaml）")
-    parser.add_argument("--batch_size",    type=int,   default=None)
-    parser.add_argument("--max_epochs",    type=int,   default=None)
-    parser.add_argument("--lr",            type=float, default=None)
-    parser.add_argument("--seed",          type=int,   default=None)
-    parser.add_argument("--runs_root",     type=str,   default=None,
-                        help="所有运行的根目录（默认: output/3_prediction/runs）")
+    parser.add_argument("-c", "--config",     type=str,   default=None,
+                        help="YAML 配置文件路径（默认: config/trainer_dl.yaml）")
+    parser.add_argument("--model_type",       type=str,   default=None,
+                        help="模型类型: mtjp | lstm | gru | cnn_lstm（覆盖 YAML）")
+    parser.add_argument("--batch_size",       type=int,   default=None)
+    parser.add_argument("--max_epochs",       type=int,   default=None)
+    parser.add_argument("--lr",               type=float, default=None)
+    parser.add_argument("--seed",             type=int,   default=None)
+    parser.add_argument("--runs_root",        type=str,   default=None)
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    if args.batch_size is not None: cfg["train"]["batch_size"] = args.batch_size
-    if args.max_epochs is not None: cfg["train"]["max_epochs"] = args.max_epochs
-    if args.lr         is not None: cfg["optimizer"]["lr"]     = args.lr
-    if args.seed       is not None: cfg["train"]["seed"]       = args.seed
-    if args.runs_root  is not None: cfg["paths"]["runs_root"]  = args.runs_root
+
+    # 命令行覆盖 YAML
+    if args.model_type  is not None: cfg["model"]["model_type"]   = args.model_type
+    if args.batch_size  is not None: cfg["train"]["batch_size"]   = args.batch_size
+    if args.max_epochs  is not None: cfg["train"]["max_epochs"]   = args.max_epochs
+    if args.lr          is not None: cfg["optimizer"]["lr"]       = args.lr
+    if args.seed        is not None: cfg["train"]["seed"]         = args.seed
+    if args.runs_root   is not None: cfg["paths"]["runs_root"]    = args.runs_root
+
+    model_type = cfg["model"].get("model_type", "mtjp")
 
     print("=" * 60)
-    print("MT-JP 联合预测模型 — 训练器")
-    print(f"  batch_size = {cfg['train']['batch_size']}")
-    print(f"  max_epochs = {cfg['train']['max_epochs']}")
-    print(f"  lr         = {cfg['optimizer']['lr']}")
-    print(f"  patience   = {cfg['train']['patience']}")
-    print(f"  runs_root  = {cfg['paths']['runs_root']}")
+    print(f"联合预测模型训练器 — {model_type.upper()}")
+    print(f"  batch_size  = {cfg['train']['batch_size']}")
+    print(f"  max_epochs  = {cfg['train']['max_epochs']}")
+    print(f"  lr          = {cfg['optimizer']['lr']}")
+    print(f"  patience    = {cfg['train']['patience']}")
+    print(f"  runs_root   = {cfg['paths']['runs_root']}")
     print("=" * 60)
 
     train(cfg)

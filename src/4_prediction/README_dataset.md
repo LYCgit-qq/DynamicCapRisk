@@ -64,7 +64,7 @@ train : val : test = 70% : 10% : 20%
 ### 输出文件结构
 数据集最终保存至 `data/processed/` 目录，包含 2 个核心文件（文件名附带数据增强关键参数）：
 
-#### 1. 主数据集文件：`mtjp_dataset_xxx.pkl`
+#### 1. 主数据集文件：`dataset_xxx.pkl`
 文件内为字典结构，包含 `train / val / test` 三个 split，每个 split 对应以下内容：
 ```python
 {
@@ -83,7 +83,7 @@ train : val : test = 70% : 10% : 20%
 - `norm`：字典，含 `mu`（训练集特征均值）、`sigma`（训练集特征标准差），供推理时 Z-score 标准化使用；
 - `feature_names`：列表，对应 17 维特征的名称（与输入张量维度一一对应）。
 
-#### 2. 特征统计文件：`mtjp_dataset_stats_xxx.csv`
+#### 2. 特征统计文件：`dataset_stats_xxx.csv`
 CSV 格式，记录每个特征的训练集统计量（供推理/部署时标准化）：
 | 列名 | 内容 |
 |------|------|
@@ -93,8 +93,8 @@ CSV 格式，记录每个特征的训练集统计量（供推理/部署时标准
 
 #### 文件名规则
 文件名后缀 `xxx` 为数据增强关键参数，示例：
-- 禁用增强：`mtjp_dataset_aug-False.pkl`
-- 启用增强：`mtjp_dataset_aug-True_onlyTrain-True_gaussStd-0.05.pkl`
+- 禁用增强：`dataset_aug-False.pkl`
+- 启用增强：`dataset_aug-True_onlyTrain-True_gaussStd-0.05.pkl`
 
 ---
 

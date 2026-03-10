@@ -1,10 +1,10 @@
 """
-build_mtjp_dataset.py
+build_dataset.py
 MT-JP 联合预测模型数据集构建模块
 
 用法：
-  python dataset.py                              # 使用默认 config/mtjp_dataset.yaml
-  python dataset.py -c path/to/mtjp_dataset.yaml      # 指定配置文件
+  python dataset.py                              # 使用默认 config/dataset.yaml
+  python dataset.py -c path/to/dataset.yaml      # 指定配置文件
   python dataset.py --seq_len 5 --seed 42        # 命令行参数覆盖 yaml
   python dataset.py --no_augment                 # 禁用数据增强（覆盖 yaml）
 """
@@ -27,7 +27,7 @@ _DEFAULT_CONFIG_PATH = os.path.join(
     "..",
     "..",
     "config",
-    "mtjp_dataset.yaml",
+    "dataset.yaml",
 )
 
 
@@ -35,7 +35,7 @@ def load_config(path: Optional[str] = None) -> dict:
     """
     加载配置：
       1. 优先使用指定的 path
-      2. 未指定则使用默认路径 config/mtjp_dataset.yaml
+      2. 未指定则使用默认路径 config/dataset.yaml
       3. 配置文件不存在则抛出异常（无内置默认配置）
     """
     candidate = path or _DEFAULT_CONFIG_PATH
@@ -526,7 +526,7 @@ def main():
         "--config",
         type=str,
         default=None,
-        help="YAML 配置文件路径（默认: config/mtjp_dataset.yaml）",
+        help="YAML 配置文件路径（默认: config/dataset.yaml）",
     )
     parser.add_argument(
         "--seq_len",

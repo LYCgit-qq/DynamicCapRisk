@@ -1,0 +1,80 @@
+# ============================================================
+# MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型 — 训练器配置
+# 对应脚本: src/4_prediction/trainer.py
+#
+# 切换模型只需修改 model.model_type：
+#   mtjp      → Multi-Task Joint Prediction（默认）
+#   lstm      → 2-层 LSTM 多任务基线
+#   gru       → 2-层 GRU 多任务基线
+#   cnn_lstm  → CNN-LSTM 混合多任务基线
+#
+# 也可通过命令行覆盖：
+#   python trainer.py --model_type lstm --lr 5e-4
+# ============================================================
+
+# -------------------------- 路径配置 --------------------------
+paths:
+  dataset_pkl: "data/dataset/dataset_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.pkl"
+  runs_root:   "output/3_prediction/runs"
+
+# -------------------------- 模型配置 --------------------------
+model:
+  # ── 模型选择（改此字段即可切换模型）──────────────────────────
+  model_type: "cnn_lstm"       # 可选: mtjp | lstm | gru | cnn_lstm
+
+  # ── 公共字段（所有模型均使用）────────────────────────────────
+  seq_len:    5            # 历史步数 T（必须与 dataset.yaml 一致）
+  input_dim:  17           # 输入特征维度 D
+  n_classes:  3            # 风险等级分类数 {低:0, 中:1, 高:2}
+  dropout:    0.2          # Dropout 率
+
+  # ── MT-JP 专用参数 ────────────────────────────────────────────
+  d_model:    128          # Transformer 隐藏维度（论文表5.3）
+  nhead:      8            # 多头注意力头数（d_model % nhead == 0）
+  num_layers: 4            # Transformer 编码器层数
+  ffn_dim:    512          # 前馈网络维度
+
+  # ── LSTM / GRU 基线参数 ───────────────────────────────────────
+  baseline_hidden:     128   # 隐藏层维度（论文对比设置）
+  baseline_num_layers: 2     # 层数
+
+  # ── CNN-LSTM 基线参数 ─────────────────────────────────────────
+  baseline_cnn_channels: 64   # 1D-CNN 输出通道数（论文对比设置）
+  baseline_cnn_layers:   2    # 卷积层数
+  baseline_kernel_size:  3    # 卷积核大小
+  baseline_lstm_hidden:  128  # CNN 后接 LSTM 的隐藏层维度
+
+# -------------------------- 训练配置 --------------------------
+train:
+  batch_size:  64
+  max_epochs:  150
+  patience:    15      # 早停轮数
+  grad_clip:   1.0
+  seed:        42
+
+# -------------------------- 优化器配置 --------------------------
+optimizer:
+  lr:           1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+
+# -------------------------- 学习率调度器 --------------------------
+scheduler:
+  T_0:     20
+  eta_min: 1.0e-6
+
+# -------------------------- 损失函数配置 --------------------------
+# 注意：所有深度学习模型（MT-JP / LSTM / GRU / CNN-LSTM）共用此损失函数，
+# 保证对比实验公平性。
+loss:
+  lambda_ability:     1.0
+  lambda_risk_reg:    1.0
+  lambda_risk_cls:    0.5
+  lambda_consistency: 0.3
+
+  huber_delta: 0.05
+  cls_weights: [1.0, 1.5, 2.0]
+
+  # TCI 一致性公式系数：R* = alpha·F_S - beta·(2·Ã_d - 1)（论文§5.2.2）
+  tci_alpha: 0.58
+  tci_beta:  0.42

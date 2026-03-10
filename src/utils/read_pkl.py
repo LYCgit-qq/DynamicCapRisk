@@ -37,7 +37,7 @@ def main():
                         # default='output/1_capability_assessment/Afl_capability_fluctuation.pkl',
                         # default='output/1_capability_assessment/Ad_result.pkl',
                         # default='output/2_risk_assessment/results/risk_list.pkl',
-                        default='D:/Local/DynamicCapRisk/output/3_prediction/mtjp_dataset_aug-False.pkl',
+                        default='D:/Local/DynamicCapRisk/output/3_prediction/dataset_aug-False.pkl',
                         help='PKL文件路径')
     args = parser.parse_args()
     

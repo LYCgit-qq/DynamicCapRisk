@@ -9,8 +9,8 @@ paths:
   raw_pkl:       "data/processed/raw_data.pkl"               # 原始多模态信号（act/eye/phy）
   cap_pkl:       "output/1_capability_assessment/Afl_capability_fluctuation.pkl"  # 能力波动结果
   risk_csv:      "output/2_risk_assessment/results/risk_windows_all.csv"          # 风险评估结果
-  output_pkl:    "data/dataset/mtjp_dataset"                 # 输出数据集PKL（自动拼接增强参数+后缀）
-  output_stats:  "data/dataset/mtjp_dataset_stats"           # 输出特征统计CSV（自动拼接增强参数+后缀）
+  output_pkl:    "data/dataset/dataset"                 # 输出数据集PKL（自动拼接增强参数+后缀）
+  output_stats:  "data/dataset/dataset_stats"           # 输出特征统计CSV（自动拼接增强参数+后缀）
 
 # -------------------------- 窗口配置 --------------------------
 window:
