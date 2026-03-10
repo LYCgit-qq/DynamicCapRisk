@@ -1,4 +1,4 @@
-# src/4_prediction/trainer.py
+# src/4_prediction/trainer_dl.py
 """
 MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型训练器
 
@@ -39,7 +39,7 @@ warnings.filterwarnings("ignore")
 
 # 允许从同级目录导入
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from src.models.mtjp_model import MTJP, build_model  as _build_mtjp
+from src.models.mtjp_model import MTJP, build_model as _build_mtjp
 from src.models.baseline_models import build_baseline_model
 
 
@@ -50,6 +50,7 @@ from src.models.baseline_models import build_baseline_model
 _DEFAULT_CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "config", "trainer_dl.yaml"
 )
+
 
 def load_config(path: Optional[str] = None) -> dict:
     """
@@ -101,6 +102,7 @@ def build_model(cfg: dict) -> nn.Module:
 # 运行目录管理
 # =============================================================================
 
+
 def make_run_dir(runs_root: str, timestamp: str, model_type: str) -> dict:
     """
     在 runs_root 下创建本次运行的独立目录，目录名含模型类型便于区分。
@@ -117,17 +119,18 @@ def make_run_dir(runs_root: str, timestamp: str, model_type: str) -> dict:
     run_dir = os.path.join(runs_root, f"{timestamp}_{model_type}")
     os.makedirs(run_dir, exist_ok=True)
     return {
-        "run_dir":    run_dir,
-        "tb_dir":     run_dir,
-        "best_ckpt":  os.path.join(run_dir, "best_model.pt"),
+        "run_dir": run_dir,
+        "tb_dir": run_dir,
+        "best_ckpt": os.path.join(run_dir, "best_model.pt"),
         "final_ckpt": os.path.join(run_dir, "final_model.pt"),
-        "log_csv":    os.path.join(run_dir, "train_log.csv"),
+        "log_csv": os.path.join(run_dir, "train_log.csv"),
         "run_config": os.path.join(run_dir, "run_config.yaml"),
     }
 
 
 def save_run_config(cfg: dict, path: str) -> None:
     """将本次运行的完整配置序列化为 YAML，方便事后复现。"""
+
     def _to_basic(obj):
         if isinstance(obj, dict):
             return {k: _to_basic(v) for k, v in obj.items()}
@@ -136,6 +139,7 @@ def save_run_config(cfg: dict, path: str) -> None:
         if isinstance(obj, (np.integer, np.floating)):
             return obj.item()
         return obj
+
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(_to_basic(cfg), f, allow_unicode=True, sort_keys=False)
 
@@ -144,12 +148,13 @@ def save_run_config(cfg: dict, path: str) -> None:
 # Dataset
 # =============================================================================
 
+
 class TorchDataset(Dataset):
     """从 dataset_aug-False.pkl 的单个 split 构建 PyTorch Dataset。"""
 
     def __init__(self, split_data: dict):
-        self.X          = torch.from_numpy(split_data["X"]).float()
-        self.y_ability  = torch.from_numpy(split_data["y_ability"]).float()
+        self.X = torch.from_numpy(split_data["X"]).float()
+        self.y_ability = torch.from_numpy(split_data["y_ability"]).float()
         self.y_risk_reg = torch.from_numpy(split_data["y_risk_reg"]).float()
         self.y_risk_cls = torch.from_numpy(split_data["y_risk_cls"]).long()
 
@@ -167,8 +172,8 @@ class TorchDataset(Dataset):
 
 def build_dataloaders(
     dataset_pkl: str,
-    batch_size:  int,
-    seed:        int,
+    batch_size: int,
+    seed: int,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     if not os.path.exists(dataset_pkl):
         raise FileNotFoundError(f"数据集不存在: {dataset_pkl}")
@@ -182,23 +187,26 @@ def build_dataloaders(
         ds = TorchDataset(data[split_name])
         return DataLoader(
             ds,
-            batch_size  = batch_size,
-            shuffle     = shuffle,
-            num_workers = 0,
-            pin_memory  = torch.cuda.is_available(),
-            generator   = g if shuffle else None,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=0,
+            pin_memory=torch.cuda.is_available(),
+            generator=g if shuffle else None,
         )
 
     tr = _loader("train", True)
-    va = _loader("val",   False)
-    te = _loader("test",  False)
-    print(f"  DataLoader: train={len(tr.dataset)} / val={len(va.dataset)} / test={len(te.dataset)}")
+    va = _loader("val", False)
+    te = _loader("test", False)
+    print(
+        f"  DataLoader: train={len(tr.dataset)} / val={len(va.dataset)} / test={len(te.dataset)}"
+    )
     return tr, va, te
 
 
 # =============================================================================
 # 损失函数
 # =============================================================================
+
 
 class MTJPLoss(nn.Module):
     """
@@ -210,48 +218,48 @@ class MTJPLoss(nn.Module):
     def __init__(self, loss_cfg: dict, device: torch.device):
         super().__init__()
         lc = loss_cfg
-        self.lambda_ability     = lc["lambda_ability"]
-        self.lambda_risk_reg    = lc["lambda_risk_reg"]
-        self.lambda_risk_cls    = lc["lambda_risk_cls"]
+        self.lambda_ability = lc["lambda_ability"]
+        self.lambda_risk_reg = lc["lambda_risk_reg"]
+        self.lambda_risk_cls = lc["lambda_risk_cls"]
         self.lambda_consistency = lc["lambda_consistency"]
-        self.tci_alpha          = lc["tci_alpha"]
-        self.tci_beta           = lc["tci_beta"]
+        self.tci_alpha = lc["tci_alpha"]
+        self.tci_beta = lc["tci_beta"]
 
         self.huber = nn.HuberLoss(delta=lc["huber_delta"], reduction="mean")
-        self.mse   = nn.MSELoss(reduction="mean")
+        self.mse = nn.MSELoss(reduction="mean")
         w = torch.tensor(lc["cls_weights"], dtype=torch.float32).to(device)
         self.ce = nn.CrossEntropyLoss(weight=w, reduction="mean")
 
     def forward(
         self,
-        outputs:    Dict[str, torch.Tensor],
-        y_ability:  torch.Tensor,
+        outputs: Dict[str, torch.Tensor],
+        y_ability: torch.Tensor,
         y_risk_reg: torch.Tensor,
         y_risk_cls: torch.Tensor,
-        f_s:        torch.Tensor,
+        f_s: torch.Tensor,
     ) -> Tuple[torch.Tensor, dict]:
-        y_hat_ability  = outputs["ability"].squeeze(-1)
+        y_hat_ability = outputs["ability"].squeeze(-1)
         y_hat_risk_reg = outputs["risk_reg"].squeeze(-1)
         y_hat_risk_cls = outputs["risk_cls"]
 
-        l_ability  = self.huber(y_hat_ability, y_ability)
+        l_ability = self.huber(y_hat_ability, y_ability)
         l_risk_reg = self.mse(y_hat_risk_reg, y_risk_reg)
         l_risk_cls = self.ce(y_hat_risk_cls, y_risk_cls)
 
-        r_tci     = self.tci_alpha * f_s - self.tci_beta * (2.0 * y_hat_ability - 1.0)
+        r_tci = self.tci_alpha * f_s - self.tci_beta * (2.0 * y_hat_ability - 1.0)
         l_consist = self.mse(r_tci, y_hat_risk_reg)
 
         total = (
-            self.lambda_ability       * l_ability
-            + self.lambda_risk_reg    * l_risk_reg
-            + self.lambda_risk_cls    * l_risk_cls
+            self.lambda_ability * l_ability
+            + self.lambda_risk_reg * l_risk_reg
+            + self.lambda_risk_cls * l_risk_cls
             + self.lambda_consistency * l_consist
         )
         loss_dict = {
-            "total":       total.item(),
-            "ability":     l_ability.item(),
-            "risk_reg":    l_risk_reg.item(),
-            "risk_cls":    l_risk_cls.item(),
+            "total": total.item(),
+            "ability": l_ability.item(),
+            "risk_reg": l_risk_reg.item(),
+            "risk_cls": l_risk_cls.item(),
             "consistency": l_consist.item(),
         }
         return total, loss_dict
@@ -261,18 +269,19 @@ class MTJPLoss(nn.Module):
 # 早停
 # =============================================================================
 
+
 class EarlyStopping:
     def __init__(self, patience: int = 15, min_delta: float = 1e-5):
-        self.patience  = patience
+        self.patience = patience
         self.min_delta = min_delta
-        self.counter   = 0
+        self.counter = 0
         self.best_loss = float("inf")
         self.triggered = False
 
     def step(self, val_loss: float) -> bool:
         if val_loss < self.best_loss - self.min_delta:
             self.best_loss = val_loss
-            self.counter   = 0
+            self.counter = 0
         else:
             self.counter += 1
         if self.counter >= self.patience:
@@ -284,14 +293,15 @@ class EarlyStopping:
 # 训练单个 epoch
 # =============================================================================
 
+
 def _run_epoch(
-    model:      nn.Module,
-    loader:     DataLoader,
-    criterion:  MTJPLoss,
-    optimizer:  Optional[torch.optim.Optimizer],
-    grad_clip:  float,
-    device:     torch.device,
-    train:      bool,
+    model: nn.Module,
+    loader: DataLoader,
+    criterion: MTJPLoss,
+    optimizer: Optional[torch.optim.Optimizer],
+    grad_clip: float,
+    device: torch.device,
+    train: bool,
 ) -> dict:
     model.train() if train else model.eval()
     agg = {k: 0.0 for k in ["total", "ability", "risk_reg", "risk_cls", "consistency"]}
@@ -301,7 +311,7 @@ def _run_epoch(
     with ctx:
         for X, ya, yr, yc in loader:
             X, ya, yr, yc = X.to(device), ya.to(device), yr.to(device), yc.to(device)
-            f_s = X[:, -1, 16]   # 环境特征 F_S（最后时间步，第17维）
+            f_s = X[:, -1, 16]  # 环境特征 F_S（最后时间步，第17维）
 
             outputs = model(X)
             loss, loss_dict = criterion(outputs, ya, yr, yc, f_s)
@@ -323,12 +333,13 @@ def _run_epoch(
 # 主训练器
 # =============================================================================
 
+
 def train(cfg: dict) -> None:
     model_type = cfg["model"].get("model_type", "mtjp").lower()
 
     # ── 生成时间戳，创建本次运行独立目录 ─────────────────────
-    timestamp  = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_paths  = make_run_dir(cfg["paths"]["runs_root"], timestamp, model_type)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_paths = make_run_dir(cfg["paths"]["runs_root"], timestamp, model_type)
     print(f"\n  模型类型    : {model_type.upper()}")
     print(f"  本次运行目录: {run_paths['run_dir']}")
 
@@ -366,59 +377,73 @@ def train(cfg: dict) -> None:
 
     # ── 损失 / 优化器 / 调度器 ────────────────────────────────
     criterion = MTJPLoss(cfg["loss"], device)
-    opt_cfg   = cfg["optimizer"]
+    opt_cfg = cfg["optimizer"]
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr           = opt_cfg["lr"],
-        weight_decay = opt_cfg["weight_decay"],
-        betas        = tuple(opt_cfg["betas"]),
+        lr=opt_cfg["lr"],
+        weight_decay=opt_cfg["weight_decay"],
+        betas=tuple(opt_cfg["betas"]),
     )
     sched_cfg = cfg["scheduler"]
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer,
-        T_0     = sched_cfg["T_0"],
-        eta_min = sched_cfg["eta_min"],
+        T_0=sched_cfg["T_0"],
+        eta_min=sched_cfg["eta_min"],
     )
     early_stop = EarlyStopping(patience=cfg["train"]["patience"])
 
     # ── 训练循环 ──────────────────────────────────────────────
     print("\n[3/4] 开始训练...")
     best_val_loss = float("inf")
-    log_rows      = []
+    log_rows = []
 
     for epoch in range(1, cfg["train"]["max_epochs"] + 1):
         t0 = time.time()
 
         tr_losses = _run_epoch(
-            model, train_loader, criterion, optimizer,
-            cfg["train"]["grad_clip"], device, train=True,
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            cfg["train"]["grad_clip"],
+            device,
+            train=True,
         )
         va_losses = _run_epoch(
-            model, val_loader, criterion, None,
-            cfg["train"]["grad_clip"], device, train=False,
+            model,
+            val_loader,
+            criterion,
+            None,
+            cfg["train"]["grad_clip"],
+            device,
+            train=False,
         )
 
         scheduler.step()
         elapsed = time.time() - t0
-        lr_now  = scheduler.get_last_lr()[0]
+        lr_now = scheduler.get_last_lr()[0]
 
         # ── TensorBoard 记录 ──────────────────────────────────
-        writer.add_scalar("Loss_train/total",       tr_losses["total"],       epoch)
-        writer.add_scalar("Loss_val/total",         va_losses["total"],       epoch)
-        writer.add_scalar("Loss_train/ability",     tr_losses["ability"],     epoch)
-        writer.add_scalar("Loss_val/ability",       va_losses["ability"],     epoch)
-        writer.add_scalar("Loss_train/risk_reg",    tr_losses["risk_reg"],    epoch)
-        writer.add_scalar("Loss_val/risk_reg",      va_losses["risk_reg"],    epoch)
-        writer.add_scalar("Loss_train/risk_cls",    tr_losses["risk_cls"],    epoch)
-        writer.add_scalar("Loss_val/risk_cls",      va_losses["risk_cls"],    epoch)
+        writer.add_scalar("Loss_train/total", tr_losses["total"], epoch)
+        writer.add_scalar("Loss_val/total", va_losses["total"], epoch)
+        writer.add_scalar("Loss_train/ability", tr_losses["ability"], epoch)
+        writer.add_scalar("Loss_val/ability", va_losses["ability"], epoch)
+        writer.add_scalar("Loss_train/risk_reg", tr_losses["risk_reg"], epoch)
+        writer.add_scalar("Loss_val/risk_reg", va_losses["risk_reg"], epoch)
+        writer.add_scalar("Loss_train/risk_cls", tr_losses["risk_cls"], epoch)
+        writer.add_scalar("Loss_val/risk_cls", va_losses["risk_cls"], epoch)
         writer.add_scalar("Loss_train/consistency", tr_losses["consistency"], epoch)
-        writer.add_scalar("Loss_val/consistency",   va_losses["consistency"], epoch)
+        writer.add_scalar("Loss_val/consistency", va_losses["consistency"], epoch)
         writer.add_scalar("LR", lr_now, epoch)
 
-        grad_norm = sum(
-            p.grad.data.norm(2).item() ** 2
-            for p in model.parameters() if p.grad is not None
-        ) ** 0.5
+        grad_norm = (
+            sum(
+                p.grad.data.norm(2).item() ** 2
+                for p in model.parameters()
+                if p.grad is not None
+            )
+            ** 0.5
+        )
         writer.add_scalar("Grad/norm", grad_norm, epoch)
 
         # ── 保存最优权重 ──────────────────────────────────────
@@ -426,12 +451,12 @@ def train(cfg: dict) -> None:
             best_val_loss = va_losses["total"]
             torch.save(
                 {
-                    "epoch":       epoch,
-                    "timestamp":   timestamp,
-                    "model_type":  model_type,
+                    "epoch": epoch,
+                    "timestamp": timestamp,
+                    "model_type": model_type,
                     "model_state": model.state_dict(),
-                    "val_loss":    best_val_loss,
-                    "cfg":         cfg,
+                    "val_loss": best_val_loss,
+                    "cfg": cfg,
                 },
                 run_paths["best_ckpt"],
             )
@@ -440,21 +465,23 @@ def train(cfg: dict) -> None:
             ckpt_mark = ""
 
         # ── CSV 日志 ──────────────────────────────────────────
-        log_rows.append({
-            "epoch":       epoch,
-            "lr":          f"{lr_now:.2e}",
-            "tr_total":    f"{tr_losses['total']:.6f}",
-            "tr_ability":  f"{tr_losses['ability']:.6f}",
-            "tr_risk_reg": f"{tr_losses['risk_reg']:.6f}",
-            "tr_risk_cls": f"{tr_losses['risk_cls']:.6f}",
-            "tr_consist":  f"{tr_losses['consistency']:.6f}",
-            "va_total":    f"{va_losses['total']:.6f}",
-            "va_ability":  f"{va_losses['ability']:.6f}",
-            "va_risk_reg": f"{va_losses['risk_reg']:.6f}",
-            "va_risk_cls": f"{va_losses['risk_cls']:.6f}",
-            "va_consist":  f"{va_losses['consistency']:.6f}",
-            "time_s":      f"{elapsed:.1f}",
-        })
+        log_rows.append(
+            {
+                "epoch": epoch,
+                "lr": f"{lr_now:.2e}",
+                "tr_total": f"{tr_losses['total']:.6f}",
+                "tr_ability": f"{tr_losses['ability']:.6f}",
+                "tr_risk_reg": f"{tr_losses['risk_reg']:.6f}",
+                "tr_risk_cls": f"{tr_losses['risk_cls']:.6f}",
+                "tr_consist": f"{tr_losses['consistency']:.6f}",
+                "va_total": f"{va_losses['total']:.6f}",
+                "va_ability": f"{va_losses['ability']:.6f}",
+                "va_risk_reg": f"{va_losses['risk_reg']:.6f}",
+                "va_risk_cls": f"{va_losses['risk_cls']:.6f}",
+                "va_consist": f"{va_losses['consistency']:.6f}",
+                "time_s": f"{elapsed:.1f}",
+            }
+        )
         pd.DataFrame(log_rows).to_csv(
             run_paths["log_csv"], index=False, encoding="utf-8-sig"
         )
@@ -468,17 +495,19 @@ def train(cfg: dict) -> None:
             )
 
         if early_stop.step(va_losses["total"]):
-            print(f"\n  ⚡ 早停触发（Epoch {epoch}，patience={cfg['train']['patience']}）")
+            print(
+                f"\n  ⚡ 早停触发（Epoch {epoch}，patience={cfg['train']['patience']}）"
+            )
             break
 
     # ── 保存最终权重 ───────────────────────────────────────────
     torch.save(
         {
-            "epoch":       epoch,
-            "timestamp":   timestamp,
-            "model_type":  model_type,
+            "epoch": epoch,
+            "timestamp": timestamp,
+            "model_type": model_type,
             "model_state": model.state_dict(),
-            "cfg":         cfg,
+            "cfg": cfg,
         },
         run_paths["final_ckpt"],
     )
@@ -491,36 +520,45 @@ def train(cfg: dict) -> None:
     ckpt = torch.load(run_paths["best_ckpt"], map_location=device)
     model.load_state_dict(ckpt["model_state"])
     te_losses = _run_epoch(
-        model, test_loader, criterion, None,
-        cfg["train"]["grad_clip"], device, train=False,
+        model,
+        test_loader,
+        criterion,
+        None,
+        cfg["train"]["grad_clip"],
+        device,
+        train=False,
     )
-    print(f"  测试集总损失: {te_losses['total']:.6f} | "
-          f"ability={te_losses['ability']:.6f} | "
-          f"risk_reg={te_losses['risk_reg']:.6f} | "
-          f"risk_cls={te_losses['risk_cls']:.6f}")
+    print(
+        f"  测试集总损失: {te_losses['total']:.6f} | "
+        f"ability={te_losses['ability']:.6f} | "
+        f"risk_reg={te_losses['risk_reg']:.6f} | "
+        f"risk_cls={te_losses['risk_cls']:.6f}"
+    )
 
     # ── TensorBoard 超参数 & 最终指标 ─────────────────────────
     writer.add_hparams(
         hparam_dict={
-            "model_type":         model_type,
-            "lr":                 cfg["optimizer"]["lr"],
-            "batch_size":         cfg["train"]["batch_size"],
-            "d_model":            cfg["model"].get("d_model", 0),
-            "num_layers":         cfg["model"].get("num_layers", cfg["model"].get("baseline_num_layers", 0)),
-            "dropout":            cfg["model"]["dropout"],
-            "lambda_ability":     cfg["loss"]["lambda_ability"],
-            "lambda_risk_reg":    cfg["loss"]["lambda_risk_reg"],
-            "lambda_risk_cls":    cfg["loss"]["lambda_risk_cls"],
+            "model_type": model_type,
+            "lr": cfg["optimizer"]["lr"],
+            "batch_size": cfg["train"]["batch_size"],
+            "d_model": cfg["model"].get("d_model", 0),
+            "num_layers": cfg["model"].get(
+                "num_layers", cfg["model"].get("baseline_num_layers", 0)
+            ),
+            "dropout": cfg["model"]["dropout"],
+            "lambda_ability": cfg["loss"]["lambda_ability"],
+            "lambda_risk_reg": cfg["loss"]["lambda_risk_reg"],
+            "lambda_risk_cls": cfg["loss"]["lambda_risk_cls"],
             "lambda_consistency": cfg["loss"]["lambda_consistency"],
         },
         metric_dict={
             "hparam/best_val_loss": best_val_loss,
-            "hparam/test_total":    te_losses["total"],
-            "hparam/test_ability":  te_losses["ability"],
+            "hparam/test_total": te_losses["total"],
+            "hparam/test_ability": te_losses["ability"],
             "hparam/test_risk_reg": te_losses["risk_reg"],
             "hparam/test_risk_cls": te_losses["risk_cls"],
         },
-        run_name="."
+        run_name=".",
     )
     writer.close()
 
@@ -537,6 +575,7 @@ def train(cfg: dict) -> None:
 # 命令行入口
 # =============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="MT-JP / LSTM / GRU / CNN-LSTM 多任务联合预测模型训练器",
@@ -549,26 +588,41 @@ def main():
   python trainer.py --model_type cnn_lstm
         """,
     )
-    parser.add_argument("-c", "--config",     type=str,   default=None,
-                        help="YAML 配置文件路径（默认: config/trainer_dl.yaml）")
-    parser.add_argument("--model_type",       type=str,   default=None,
-                        help="模型类型: mtjp | lstm | gru | cnn_lstm（覆盖 YAML）")
-    parser.add_argument("--batch_size",       type=int,   default=None)
-    parser.add_argument("--max_epochs",       type=int,   default=None)
-    parser.add_argument("--lr",               type=float, default=None)
-    parser.add_argument("--seed",             type=int,   default=None)
-    parser.add_argument("--runs_root",        type=str,   default=None)
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        default=None,
+        help="YAML 配置文件路径（默认: config/trainer_dl.yaml）",
+    )
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        default=None,
+        help="模型类型: mtjp | lstm | gru | cnn_lstm（覆盖 YAML）",
+    )
+    parser.add_argument("--batch_size", type=int, default=None)
+    parser.add_argument("--max_epochs", type=int, default=None)
+    parser.add_argument("--lr", type=float, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--runs_root", type=str, default=None)
     args = parser.parse_args()
 
     cfg = load_config(args.config)
 
     # 命令行覆盖 YAML
-    if args.model_type  is not None: cfg["model"]["model_type"]   = args.model_type
-    if args.batch_size  is not None: cfg["train"]["batch_size"]   = args.batch_size
-    if args.max_epochs  is not None: cfg["train"]["max_epochs"]   = args.max_epochs
-    if args.lr          is not None: cfg["optimizer"]["lr"]       = args.lr
-    if args.seed        is not None: cfg["train"]["seed"]         = args.seed
-    if args.runs_root   is not None: cfg["paths"]["runs_root"]    = args.runs_root
+    if args.model_type is not None:
+        cfg["model"]["model_type"] = args.model_type
+    if args.batch_size is not None:
+        cfg["train"]["batch_size"] = args.batch_size
+    if args.max_epochs is not None:
+        cfg["train"]["max_epochs"] = args.max_epochs
+    if args.lr is not None:
+        cfg["optimizer"]["lr"] = args.lr
+    if args.seed is not None:
+        cfg["train"]["seed"] = args.seed
+    if args.runs_root is not None:
+        cfg["paths"]["runs_root"] = args.runs_root
 
     model_type = cfg["model"].get("model_type", "mtjp")
 

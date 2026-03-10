@@ -24,6 +24,14 @@ Multimodal Transformer for Joint Prediction (MT-JP)
         "risk_reg" : (B, 1)   ∈ [-1,1]  风险度回归
         "risk_cls" : (B, 3)              风险等级 logits（三分类）
       }
+
+消融实验支持（通过 cfg["model"]["ablation"] 控制）：
+  none            : 完整 MT-JP（默认）
+  no_cross_attn   : 移除交叉注意力，改用线性层
+  no_consistency  : 一致性损失置零（仅需在 YAML 中设 lambda_consistency=0.0，无需改此处）
+  single_modal    : 仅使用行为特征，跳过融合层
+  early_fusion    : 早期融合，17维特征直接输入单一编码器
+  late_fusion     : 晚期融合，四路模态各自独立预测后取均值
 """
 
 import math
@@ -200,25 +208,34 @@ class CrossAttention(nn.Module):
 
 class RiskBranch(nn.Module):
     """
-    风险预测分支（论文 §5.2.1 公式 5.11）：
+    风险预测分支（论文 §5.2.1 公式 5.11）。
 
-      h_ability  = h_global @ W_proj_ability      投影能力表示作为 K/V
-      f_s_emb    = F_S * w_field                  风险场强嵌入
-      h_risk_env = LayerNorm(h_global + f_s_emb)  融合场强的查询向量
+    use_cross_attn=True（默认，完整 MT-JP）：
+      h_ability  = h_global @ W_proj_ability
+      f_s_emb    = F_S * w_field
+      h_risk_env = LayerNorm(h_global + f_s_emb)
       h_risk     = CrossAttn(Q=h_risk_env, K/V=h_ability)
 
-      ŷ_risk_reg = Tanh(h_risk @ w_reg)           ∈ [-1,1]
-      ŷ_risk_cls = h_risk @ W_cls                 (B,3) logits
+    use_cross_attn=False（消融：移除交叉注意力）：
+      交叉注意力替换为线性层，直接将 h_risk_env 投影为 h_risk，
+      不再显式建模能力-风险耦合关系。
+
+    输出：
+      ŷ_risk_reg ∈ [-1,1]（Tanh）
+      ŷ_risk_cls  (B,3)  logits
     """
     def __init__(
         self,
-        d_model:   int   = 128,
-        proj_dim:  int   = 128,
-        nhead:     int   = 8,
-        n_classes: int   = 3,
-        dropout:   float = 0.2,
+        d_model:        int   = 128,
+        proj_dim:       int   = 128,
+        nhead:          int   = 8,
+        n_classes:      int   = 3,
+        dropout:        float = 0.2,
+        use_cross_attn: bool  = True,   # 消融开关
     ):
         super().__init__()
+        self.use_cross_attn = use_cross_attn
+
         # 能力投影（作为 CrossAttn 的 K/V 来源）
         self.ability_proj = nn.Linear(d_model, proj_dim)
 
@@ -228,86 +245,93 @@ class RiskBranch(nn.Module):
         # 融合 h_global + F_S_emb 后的 LayerNorm（查询向量）
         self.query_norm   = nn.LayerNorm(proj_dim)
 
-        # 交叉注意力
-        self.cross_attn   = CrossAttention(proj_dim, nhead, dropout)
+        if self.use_cross_attn:
+            # ── 完整版：交叉注意力 ──────────────────────────────
+            self.cross_attn = CrossAttention(proj_dim, nhead, dropout)
+        else:
+            # ── 消融版：线性层替代，不建模能力-风险耦合 ──────────
+            self.linear_replace = nn.Sequential(
+                nn.Linear(proj_dim, proj_dim),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+            )
 
-        # 输出层
-        self.dropout      = nn.Dropout(dropout)
-        self.reg_head     = nn.Sequential(
+        # 输出层（两版本共用）
+        self.dropout  = nn.Dropout(dropout)
+        self.reg_head = nn.Sequential(
             nn.Linear(proj_dim, 1),
             nn.Tanh(),
         )
-        self.cls_head     = nn.Linear(proj_dim, n_classes)
+        self.cls_head = nn.Linear(proj_dim, n_classes)
 
     def forward(
         self,
         h_global: torch.Tensor,   # (B, d_model)
-        f_s:      torch.Tensor,   # (B,) 或 (B,1)  风险场强
+        f_s:      torch.Tensor,   # (B,) 或 (B,1)
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        返回：
-          risk_reg : (B, 1)   Tanh 输出
-          risk_cls : (B, 3)   logits（未经 Softmax，供 CrossEntropy 使用）
-        """
         if f_s.dim() == 1:
             f_s = f_s.unsqueeze(-1)   # (B, 1)
 
-        # 能力向量（K/V）
-        h_ability = self.ability_proj(h_global)        # (B, proj_dim)
+        h_ability  = self.ability_proj(h_global)                    # (B, proj_dim)
+        f_s_emb    = self.field_embed(f_s)                          # (B, proj_dim)
+        h_risk_env = self.query_norm(self.ability_proj(h_global) + f_s_emb)
 
-        # 风险查询向量（Q）= h_global 投影 + F_S 嵌入，残差后归一化
-        f_s_emb   = self.field_embed(f_s)              # (B, proj_dim)
-        h_risk_env = self.query_norm(
-            self.ability_proj(h_global) + f_s_emb      # proj 后加场强嵌入
-        )                                              # (B, proj_dim)
+        if self.use_cross_attn:
+            # 完整版：交叉注意力显式建模能力-风险耦合
+            h_risk = self.cross_attn(h_risk_env, h_ability, h_ability)
+        else:
+            # 消融版：线性映射，无能力-风险交互
+            h_risk = self.linear_replace(h_risk_env)
 
-        # 交叉注意力：风险查询 感知 能力状态
-        h_risk = self.cross_attn(h_risk_env, h_ability, h_ability)  # (B, proj_dim)
-        h_risk = self.dropout(h_risk)
-
-        risk_reg = self.reg_head(h_risk)               # (B, 1)
-        risk_cls = self.cls_head(h_risk)               # (B, 3)
+        h_risk   = self.dropout(h_risk)
+        risk_reg = self.reg_head(h_risk)   # (B, 1)
+        risk_cls = self.cls_head(h_risk)   # (B, 3)
         return risk_reg, risk_cls
 
 
 # =============================================================================
-# MT-JP 主模型
+# MT-JP 主模型（含消融实验支持）
 # =============================================================================
 
 class MTJP(nn.Module):
     """
     Multimodal Transformer for Joint Prediction (MT-JP)
 
-    输入拆分（论文 §5.1 特征维度 D=17）：
-      X[:, :, 0:8]   → behavior  (8d)
-      X[:, :, 8:11]  → eye       (3d)
-      X[:, :, 11:16] → physio    (5d)
-      X[:, :, 16:17] → env F_S   (1d)
+    消融实验通过 ablation 参数控制：
+      "none"          → 完整 MT-JP（默认）
+      "no_cross_attn" → RiskBranch 中交叉注意力替换为线性层
+      "no_consistency"→ 仅需 YAML 中 lambda_consistency=0.0，模型结构不变
+      "single_modal"  → 仅 BehaviorEncoder，跳过 CrossModalFusion，直接均值池化
+      "early_fusion"  → 17 维特征直接输入单一 Transformer 编码器
+      "late_fusion"   → 四路模态各自独立预测后对输出取均值
 
     参数（表5.3）：
       d_model=128, nhead=8, num_layers=4, ffn_dim=512, dropout=0.2
     """
 
-    # 模态切分索引（对应 dataset.py feat_cols_17 顺序）
     MODAL_SLICES = {
         "behavior": slice(0, 8),
         "eye":      slice(8, 11),
         "physio":   slice(11, 16),
         "env":      slice(16, 17),
     }
+    # (模态名, 特征维度) 顺序与 MODAL_SLICES 一致
+    MODAL_DIMS = [("behavior", 8), ("eye", 3), ("physio", 5), ("env", 1)]
 
     def __init__(
         self,
-        seq_len:    int   = 5,     # 历史步数 T（15s）
+        seq_len:    int   = 5,
         d_model:    int   = 128,
         nhead:      int   = 8,
         num_layers: int   = 4,
         ffn_dim:    int   = 512,
         dropout:    float = 0.2,
         n_classes:  int   = 3,
+        ablation:   str   = "none",   # ← 消融开关
     ):
         super().__init__()
-        self.seq_len = seq_len
+        self.seq_len  = seq_len
+        self.ablation = ablation.lower()
 
         enc_kwargs = dict(
             d_model    = d_model,
@@ -318,21 +342,52 @@ class MTJP(nn.Module):
             dropout    = dropout,
         )
 
-        # 四个独立的模态编码器
-        self.behavior_enc = ModalityEncoder(in_dim=8, **enc_kwargs)
-        self.eye_enc      = ModalityEncoder(in_dim=3, **enc_kwargs)
-        self.physio_enc   = ModalityEncoder(in_dim=5, **enc_kwargs)
-        self.env_enc      = ModalityEncoder(in_dim=1, **enc_kwargs)
+        # ── 根据消融类型初始化子模块 ──────────────────────────────
+        if self.ablation == "early_fusion":
+            # 所有模态特征直接拼接（17维）后输入单一编码器
+            self.unified_enc    = ModalityEncoder(in_dim=17, **enc_kwargs)
+            self.ability_branch = AbilityBranch(d_model, d_model // 2, dropout)
+            self.risk_branch    = RiskBranch(d_model, d_model, nhead, n_classes, dropout,
+                                             use_cross_attn=True)
 
-        # 跨模态融合层
-        self.fusion = CrossModalFusion(d_model, nhead, ffn_dim, dropout)
+        elif self.ablation == "late_fusion":
+            # 四路独立编码器，每路各自配备独立预测头
+            self.encoders = nn.ModuleList([
+                ModalityEncoder(in_dim=dim, **enc_kwargs)
+                for _, dim in self.MODAL_DIMS
+            ])
+            self.ability_branches = nn.ModuleList([
+                AbilityBranch(d_model, d_model // 2, dropout) for _ in self.MODAL_DIMS
+            ])
+            self.risk_branches = nn.ModuleList([
+                RiskBranch(d_model, d_model, nhead, n_classes, dropout,
+                           use_cross_attn=True)
+                for _ in self.MODAL_DIMS
+            ])
 
-        # 双分支预测头
-        self.ability_branch = AbilityBranch(d_model, d_model // 2, dropout)
-        self.risk_branch    = RiskBranch(d_model, d_model, nhead, n_classes, dropout)
+        elif self.ablation == "single_modal":
+            # 仅保留行为模态编码器，跳过 CrossModalFusion
+            self.behavior_enc   = ModalityEncoder(in_dim=8, **enc_kwargs)
+            self.ability_branch = AbilityBranch(d_model, d_model // 2, dropout)
+            self.risk_branch    = RiskBranch(d_model, d_model, nhead, n_classes, dropout,
+                                             use_cross_attn=True)
 
-        # 权重初始化
+        else:
+            # "none" 或 "no_cross_attn" 或 "no_consistency"：保留完整四路编码器 + 融合层
+            self.behavior_enc = ModalityEncoder(in_dim=8, **enc_kwargs)
+            self.eye_enc      = ModalityEncoder(in_dim=3, **enc_kwargs)
+            self.physio_enc   = ModalityEncoder(in_dim=5, **enc_kwargs)
+            self.env_enc      = ModalityEncoder(in_dim=1, **enc_kwargs)
+            self.fusion       = CrossModalFusion(d_model, nhead, ffn_dim, dropout)
+            self.ability_branch = AbilityBranch(d_model, d_model // 2, dropout)
+            # no_cross_attn：RiskBranch 内部将交叉注意力替换为线性层
+            use_ca = (self.ablation != "no_cross_attn")
+            self.risk_branch = RiskBranch(d_model, d_model, nhead, n_classes, dropout,
+                                          use_cross_attn=use_ca)
+
         self._init_weights()
+
+    # -------------------------------------------------------------------------
 
     def _init_weights(self):
         for m in self.modules():
@@ -346,6 +401,8 @@ class MTJP(nn.Module):
             elif isinstance(m, nn.Embedding):
                 nn.init.normal_(m.weight, std=0.02)
 
+    # -------------------------------------------------------------------------
+
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         x : (B, T, 17)
@@ -356,27 +413,68 @@ class MTJP(nn.Module):
           "risk_cls" : (B, 3)   logits
           "h_global" : (B, 128) 融合表示（供一致性损失使用）
         """
-        # ── 1. 模态拆分 ─────────────────────────────────────────
-        x_beh = x[:, :, self.MODAL_SLICES["behavior"]]   # (B, T, 8)
-        x_eye = x[:, :, self.MODAL_SLICES["eye"]]        # (B, T, 3)
-        x_phy = x[:, :, self.MODAL_SLICES["physio"]]     # (B, T, 5)
-        x_env = x[:, :, self.MODAL_SLICES["env"]]        # (B, T, 1)
+        f_s = x[:, -1, 16]   # (B,) 风险场强，各变体均需使用
 
-        # F_S：取最后一步的场强值用于风险分支（当前预测窗口的场景）
-        f_s = x[:, -1, 16]                               # (B,)
+        # ── early_fusion ──────────────────────────────────────
+        if self.ablation == "early_fusion":
+            h_enc    = self.unified_enc(x)          # (B, T, d)
+            h_global = h_enc.mean(dim=1)            # (B, d)  均值池化替代融合层
+            ability  = self.ability_branch(h_global)
+            risk_reg, risk_cls = self.risk_branch(h_global, f_s)
 
-        # ── 2. 各模态独立编码 ─────────────────────────────────
-        enc_beh = self.behavior_enc(x_beh)   # (B, T, 128)
-        enc_eye = self.eye_enc(x_eye)        # (B, T, 128)
-        enc_phy = self.physio_enc(x_phy)     # (B, T, 128)
-        enc_env = self.env_enc(x_env)        # (B, T, 128)
+        # ── late_fusion ───────────────────────────────────────
+        elif self.ablation == "late_fusion":
+            slices = [self.MODAL_SLICES[name] for name, _ in self.MODAL_DIMS]
+            ability_preds  = []
+            risk_reg_preds = []
+            risk_cls_preds = []
+            h_global_list  = []
 
-        # ── 3. 跨模态融合 ─────────────────────────────────────
-        h_global = self.fusion(enc_beh, enc_eye, enc_phy, enc_env)  # (B, 128)
+            for enc, ab_branch, rk_branch, sl in zip(
+                self.encoders, self.ability_branches, self.risk_branches, slices
+            ):
+                h = enc(x[:, :, sl]).mean(dim=1)        # (B, d) 各模态独立均值池化
+                h_global_list.append(h)
+                ability_preds.append(ab_branch(h))
+                rr, rc = rk_branch(h, f_s)
+                risk_reg_preds.append(rr)
+                risk_cls_preds.append(rc)
 
-        # ── 4. 双分支预测 ──────────────────────────────────────
-        ability  = self.ability_branch(h_global)              # (B, 1)
-        risk_reg, risk_cls = self.risk_branch(h_global, f_s)  # (B,1), (B,3)
+            # 四路预测结果均值融合
+            ability  = torch.stack(ability_preds,  dim=0).mean(dim=0)   # (B,1)
+            risk_reg = torch.stack(risk_reg_preds, dim=0).mean(dim=0)   # (B,1)
+            risk_cls = torch.stack(risk_cls_preds, dim=0).mean(dim=0)   # (B,3)
+            h_global = torch.stack(h_global_list,  dim=0).mean(dim=0)   # (B,d)
+            return {
+                "ability":  ability,
+                "risk_reg": risk_reg,
+                "risk_cls": risk_cls,
+                "h_global": h_global,
+            }
+
+        # ── single_modal ──────────────────────────────────────
+        elif self.ablation == "single_modal":
+            x_beh    = x[:, :, self.MODAL_SLICES["behavior"]]   # (B, T, 8)
+            enc_beh  = self.behavior_enc(x_beh)                 # (B, T, d)
+            h_global = enc_beh.mean(dim=1)                      # (B, d) 跳过融合层
+            ability  = self.ability_branch(h_global)
+            risk_reg, risk_cls = self.risk_branch(h_global, f_s)
+
+        # ── none / no_cross_attn / no_consistency（完整四路） ──
+        else:
+            x_beh = x[:, :, self.MODAL_SLICES["behavior"]]
+            x_eye = x[:, :, self.MODAL_SLICES["eye"]]
+            x_phy = x[:, :, self.MODAL_SLICES["physio"]]
+            x_env = x[:, :, self.MODAL_SLICES["env"]]
+
+            enc_beh = self.behavior_enc(x_beh)
+            enc_eye = self.eye_enc(x_eye)
+            enc_phy = self.physio_enc(x_phy)
+            enc_env = self.env_enc(x_env)
+
+            h_global = self.fusion(enc_beh, enc_eye, enc_phy, enc_env)
+            ability  = self.ability_branch(h_global)
+            risk_reg, risk_cls = self.risk_branch(h_global, f_s)
 
         return {
             "ability":  ability,
@@ -396,7 +494,7 @@ class MTJP(nn.Module):
 def build_model(cfg: dict) -> "MTJP":
     """
     从配置字典构建 MT-JP 模型。
-    cfg 对应 config/mtjp_model.yaml 的 model 节。
+    cfg 对应 config/trainer_dl.yaml 的 model 节。
     """
     m = cfg.get("model", cfg)
     model = MTJP(
@@ -407,6 +505,7 @@ def build_model(cfg: dict) -> "MTJP":
         ffn_dim    = m.get("ffn_dim",    512),
         dropout    = m.get("dropout",    0.2),
         n_classes  = m.get("n_classes",  3),
+        ablation   = m.get("ablation",   "none"),   # ← 新增
     )
     return model
 
@@ -420,12 +519,15 @@ if __name__ == "__main__":
     B, T, D = 4, 5, 17
     x = torch.randn(B, T, D)
 
-    model = MTJP(seq_len=T)
-    out   = model(x)
+    ablation_list = ["none", "no_cross_attn", "single_modal", "early_fusion", "late_fusion"]
 
-    print(f"参数量: {model.count_parameters():,}")
-    print(f"ability  : {out['ability'].shape}  range [{out['ability'].min():.3f}, {out['ability'].max():.3f}]")
-    print(f"risk_reg : {out['risk_reg'].shape}  range [{out['risk_reg'].min():.3f}, {out['risk_reg'].max():.3f}]")
-    print(f"risk_cls : {out['risk_cls'].shape}")
-    print(f"h_global : {out['h_global'].shape}")
-    print("✓ 前向传播通过")
+    for abl in ablation_list:
+        model = MTJP(seq_len=T, ablation=abl)
+        out   = model(x)
+        print(
+            f"[{abl:<16}] params={model.count_parameters():>9,} | "
+            f"ability={tuple(out['ability'].shape)} "
+            f"risk_reg={tuple(out['risk_reg'].shape)} "
+            f"risk_cls={tuple(out['risk_cls'].shape)}"
+        )
+    print("\n✓ 所有消融变体前向传播通过")

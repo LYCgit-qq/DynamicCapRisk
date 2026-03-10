@@ -1,54 +1,20 @@
 # ============================================================
-# MT-JP 联合预测模型 — 评估器配置
+# MT-JP 单模型评估器配置
 # 对应脚本: src/4_prediction/evaluator.py
-# 注意：代码已移除内置默认配置，所有参数均依赖此YAML文件
 # ============================================================
 
 # -------------------------- 路径配置 --------------------------
 paths:
   dataset_pkl: "data/dataset/dataset_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.pkl"
-  ckpt:        "output/3_prediction/runs/20260310_155225_mtjp/best_model.pt"  # 单模型评估时使用；替换为实际ckpt路径
-  output_dir:  "output/3_prediction"                 # 评估结果输出目录
-
-  # ---------- 多模型对比路径（--compare 模式使用）----------
-  # 方式一：指定根目录，自动扫描所有子目录中的 best_model.pt / model.pkl
-  compare_ckpt_dir: "output/3_prediction/runs"
-
-  # 方式二：手动逐模型指定检查点路径（优先级高于 compare_ckpt_dir）
-  # 留空则使用自动扫描；注释掉不需要的模型即可
-  compare_ckpt_list:
-    svr:      ""   # 例: "output/3_prediction/runs/20260301_120000_svr/model.pkl"
-    cart:     ""   # 例: "output/3_prediction/runs/20260301_120000_cart/model.pkl"
-    lstm:     ""   # 例: "output/3_prediction/runs/20260301_120000_lstm/best_model.pt"
-    gru:      ""   # 例: "output/3_prediction/runs/20260301_120000_gru/best_model.pt"
-    cnn_lstm: ""   # 例: "output/3_prediction/runs/20260301_120000_cnn_lstm/best_model.pt"
-    mt_jp:    ""   # 例: "output/3_prediction/runs/20260301_120000_mtjp/best_model.pt"
+  ckpt:        "output/3_prediction/runs/20260310_155225_mtjp/best_model.pt"  # 替换为实际路径
+  output_dir:  "output/3_prediction"
 
 # -------------------------- 评估配置 --------------------------
 eval:
-  batch_size:        256                # 推理批次大小（越大越快，不超GPU显存即可）
-  split:             "test"             # 评估集：train/val/test（建议用test）
-  risk_thresh_high:  0.1                # 高风险阈值（R* > 0.1，与论文图5.8一致）
-  risk_thresh_low:  -0.1                # 低风险阈值（R* < -0.1）
+  batch_size:       256     # 推理批次大小
+  split:            "test"  # 评估集：train / val / test
+  risk_thresh_high:  0.1    # 高风险阈值（R* > 0.1）
+  risk_thresh_low:  -0.1    # 低风险阈值（R* < -0.1）
 
 # -------------------------- 分类标签 --------------------------
-class_names: ["低风险", "中风险", "高风险"]  # 与risk_level_map对应
-
-# ---------- 多模型对比元信息（可选，用于论文表5.7/5.8）----------
-# 训练时间（分钟）：若检查点中已记录 train_time_min 字段则自动读取，此处可手动补充/覆盖
-compare_train_times:
-  svr:      23.5
-  cart:      8.7
-  lstm:     45.2
-  gru:      38.6
-  cnn_lstm: 51.3
-  mt_jp:    62.8
-
-# 参数量标注（字符串，仅深度学习模型；传统模型填 "-"）
-compare_param_counts:
-  svr:      "-"
-  cart:     "-"
-  lstm:     "3.2M"
-  gru:      "2.5M"
-  cnn_lstm: "3.8M"
-  mt_jp:    "2.8M"
+class_names: ["低风险", "中风险", "高风险"]

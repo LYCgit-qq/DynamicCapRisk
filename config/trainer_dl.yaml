@@ -1,3 +1,5 @@
+# D:\Local\DynamicCapRisk\config\trainer_dl.yaml
+
 # ============================================================
 # MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型 — 训练器配置
 # 对应脚本: src/4_prediction/trainer.py
@@ -10,6 +12,20 @@
 #
 # 也可通过命令行覆盖：
 #   python trainer.py --model_type lstm --lr 5e-4
+#
+# ──────────────────────────────────────────────────────────
+# 消融实验快速切换（仅对 model_type=mtjp 生效）：
+#
+#   model.ablation 可选值：
+#     none            → 完整 MT-JP（默认）
+#     no_cross_attn   → 移除交叉注意力（RiskBranch 改为线性层）
+#     no_consistency  → 移除一致性损失（将下方 lambda_consistency 置 0.0）
+#     single_modal    → 仅使用行为特征，跳过融合层
+#     early_fusion    → 早期融合（17维直接输入单一编码器）
+#     late_fusion     → 晚期融合（四路各自预测后均值融合）
+#
+#   注意：no_consistency 只需改 loss.lambda_consistency=0.0，
+#         ablation 字段保持 "none" 即可，模型结构不变。
 # ============================================================
 
 # -------------------------- 路径配置 --------------------------
@@ -20,7 +36,12 @@ paths:
 # -------------------------- 模型配置 --------------------------
 model:
   # ── 模型选择（改此字段即可切换模型）──────────────────────────
-  model_type: "cnn_lstm"       # 可选: mtjp | lstm | gru | cnn_lstm
+  model_type: "mtjp"           # 可选: mtjp | lstm | gru | cnn_lstm
+
+  # ── 消融实验开关（仅 model_type=mtjp 时生效）─────────────────
+  # 可选值: none | no_cross_attn | single_modal | early_fusion | late_fusion
+  # 移除一致性损失请勿改此字段，而是将 loss.lambda_consistency 置 0.0
+  ablation: "none"
 
   # ── 公共字段（所有模型均使用）────────────────────────────────
   seq_len:    5            # 历史步数 T（必须与 dataset.yaml 一致）
@@ -66,11 +87,14 @@ scheduler:
 # -------------------------- 损失函数配置 --------------------------
 # 注意：所有深度学习模型（MT-JP / LSTM / GRU / CNN-LSTM）共用此损失函数，
 # 保证对比实验公平性。
+#
+# 消融实验"移除一致性损失"：将 lambda_consistency 改为 0.0 即可，
+# 同时建议将 ablation 保持 "none"（模型结构不变，仅关闭约束项）。
 loss:
   lambda_ability:     1.0
   lambda_risk_reg:    1.0
   lambda_risk_cls:    0.5
-  lambda_consistency: 0.3
+  lambda_consistency: 0.3   # ← 消融"移除一致性损失"时改为 0.0
 
   huber_delta: 0.05
   cls_weights: [1.0, 1.5, 2.0]

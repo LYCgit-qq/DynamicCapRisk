@@ -1,0 +1,54 @@
+# ============================================================
+# MT-JP 多模型横向对比评估器配置
+# 对应脚本: src/4_prediction/evaluator_compare.py
+# ============================================================
+
+# -------------------------- 路径配置 --------------------------
+paths:
+  dataset_pkl: "data/dataset/dataset_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.pkl"
+  output_dir:  "output/3_prediction"
+
+  # 方式一：自动扫描根目录（脚本按路径名关键词识别模型类型）
+  compare_ckpt_dir: "output/3_prediction/runs"
+
+  # 方式二：手动逐模型指定（优先级高于 compare_ckpt_dir）
+  # 将对应模型路径填入即可；留空 "" 则跳过该模型
+  compare_ckpt_list:
+    svr:      ""   # 例: "output/3_prediction/runs/20260301_svr/model.pkl"
+    cart:     ""   # 例: "output/3_prediction/runs/20260301_cart/model.pkl"
+    lstm:     ""   # 例: "output/3_prediction/runs/20260301_lstm/best_model.pt"
+    gru:      ""   # 例: "output/3_prediction/runs/20260301_gru/best_model.pt"
+    cnn_lstm: ""   # 例: "output/3_prediction/runs/20260301_cnn_lstm/best_model.pt"
+    mt_jp:    ""   # 例: "output/3_prediction/runs/20260310_155225_mtjp/best_model.pt"
+
+# -------------------------- 评估配置 --------------------------
+eval:
+  batch_size:       256     # 推理批次大小
+  split:            "test"  # 评估集：train / val / test
+  risk_thresh_high:  0.1    # 高风险阈值（R* > 0.1）
+  risk_thresh_low:  -0.1    # 低风险阈值（R* < -0.1）
+
+# -------------------------- 分类标签 --------------------------
+class_names: ["低风险", "中风险", "高风险"]
+
+# ---------- 元信息（对应论文表5.7 的训练时间和参数量列）----------
+# 命令行 --train_times / --param_counts 可覆盖下方的值
+
+# 训练时间（分钟）
+# 若检查点中已记录 train_time_min 字段则自动读取，此处可手动补充/覆盖
+compare_train_times:
+  svr:       23.5
+  cart:       8.7
+  lstm:      45.2
+  gru:       38.6
+  cnn_lstm:  51.3
+  mt_jp:     62.8
+
+# 参数量（字符串；传统模型填 "-"）
+compare_param_counts:
+  svr:      "-"
+  cart:     "-"
+  lstm:     "3.2M"
+  gru:      "2.5M"
+  cnn_lstm: "3.8M"
+  mt_jp:    "2.8M"
