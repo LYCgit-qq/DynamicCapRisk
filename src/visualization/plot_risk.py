@@ -27,6 +27,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib import rcParams
 import seaborn as sns
+from scipy.signal import savgol_filter
+from scipy.interpolate import make_interp_spline
 
 
 # ====================== 统一风格配置 ======================
@@ -53,31 +55,39 @@ SPINE_ALPHA  = 0.4
 
 
 def set_paper_style():
-    """
-    统一论文级绘图风格（与 plot_capability.py 完全一致）
-    """
-    sns.set_style("whitegrid", {"axes.grid": True, "grid.linestyle": "--"})
+    sns.set_style("whitegrid", {
+        "axes.grid":          True,
+        "grid.linestyle":     "--",
+        "axes.spines.top":    True,
+        "axes.spines.right":  True,
+        "axes.spines.left":   True,
+        "axes.spines.bottom": True,
+    })
     plt.rcParams.update({
-        # 字体
         "font.family":        "sans-serif",
         "font.sans-serif":    ["SimSun", "Times New Roman", "DejaVu Sans"],
         "axes.unicode_minus": False,
-        # 尺寸
         "font.size":          12,
         "axes.labelsize":     14,
         "axes.titlesize":     15,
         "xtick.labelsize":    11,
         "ytick.labelsize":    11,
         "legend.fontsize":    11,
-        # 线条
-        "axes.linewidth":     0.8,
+        "axes.linewidth":     1.2,       # 边框粗细
+        "axes.edgecolor":     "black",   # 边框颜色
         "lines.linewidth":    LINE_WIDTH,
-        # 分辨率
         "figure.dpi":         150,
         "savefig.dpi":        300,
         "savefig.bbox":       "tight",
         "savefig.format":     "png",
     })
+
+
+def _apply_spine(ax) -> None:
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_edgecolor('black')
+        spine.set_linewidth(1.2)
 
 
 def _save_and_close(fig, save_path, msg=""):
@@ -234,7 +244,7 @@ def plot_stacked_bar(
     ax.set_ylim(0, 1.1)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     ax.legend(loc='upper left', fontsize=11, framealpha=0.9)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
 
     save_path = os.path.join(output_dir, save_name)
     _save_and_close(fig, save_path, "堆叠柱状图")
@@ -342,7 +352,7 @@ def plot_threshold_f1(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> Non
     ax.set_xticks(np.round(thresholds, 2))
     ax.legend()
     ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'fig4_5_threshold_f1.png'), cfg['vis']['dpi'])
 
@@ -372,7 +382,7 @@ def plot_r_histogram(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None
     ax.set_title('图4.6  全体样本风险度 R* 分布直方图')
     ax.legend()
     ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'fig4_6_r_histogram.png'), cfg['vis']['dpi'])
 
@@ -410,7 +420,7 @@ def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> 
     ax.set_ylabel('风险度 R*')
     ax.set_title('图4.7  三组驾驶人风险度分布小提琴图')
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'fig4_7_violin_by_group.png'), cfg['vis']['dpi'])
 
@@ -447,7 +457,7 @@ def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) ->
     ax.set_title('图4.8  三组驾驶人在四个场景下风险度均值变化折线图')
     ax.legend()
     ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'fig4_8_line_scenario_group.png'), cfg['vis']['dpi'])
 
@@ -496,7 +506,7 @@ def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) 
     handles = [mpatches.Patch(facecolor=gc[g], alpha=0.7, label=g) for g in groups]
     ax.legend(handles=handles)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'fig4_9_box_scenario_group.png'), cfg['vis']['dpi'])
 
@@ -543,7 +553,7 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
     ax.set_title('图4.10  三组驾驶人风险等级分布堆叠柱状图')
     ax.legend(loc='upper right')
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'fig4_10_stacked_bar.png'), cfg['vis']['dpi'])
 
@@ -611,7 +621,7 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
         ax.set_title(f'{title}（样本 {sidx}，R* 均值={r_star.mean():.3f}）')
         ax.legend(loc='upper right', fontsize=8)
         ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-        sns.despine(ax=ax)
+        _apply_spine(ax)
         if row_idx == len(reps) - 1:
             ax.set_xlabel('窗口序号')
 
@@ -672,7 +682,7 @@ def plot_single_sample(sample_idx: int,
     ax.set_ylim(-0.05, 1.05)
     ax.legend(loc='upper right', fontsize=8)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
 
     ax = axes[1]
     _fill_scene_bg(ax, fld, cfg)
@@ -681,7 +691,7 @@ def plot_single_sample(sample_idx: int,
     ax.set_ylim(-0.05, 1.05)
     ax.legend(loc='upper right', fontsize=8)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
 
     ax = axes[2]
     _fill_scene_bg(ax, fld, cfg)
@@ -697,7 +707,7 @@ def plot_single_sample(sample_idx: int,
     ax.set_ylim(-1.1, 1.1)
     ax.legend(loc='upper right', fontsize=8)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
 
     bg    = _scene_bg_colors(cfg)
     lname = {int(k): v for k, v in cfg['scenarios']['label_name'].items()}
@@ -762,7 +772,7 @@ def plot_roc_curve(
     ax.set_title("R* 判别异常事件 ROC 曲线", fontsize=13)
     ax.legend(fontsize=10)
     ax.grid(alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
 
     _savefig(fig, os.path.join(fig_dir, save_name), dpi)
@@ -813,7 +823,7 @@ def plot_risk_event_rate(
     ax.set_title(f"不同风险等级下异常事件发生率\n{chi2_str}", fontsize=11)
     ax.set_ylim(0, max(rates) * 1.25 + 3)
     ax.grid(axis="y", alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
 
     _savefig(fig, os.path.join(fig_dir, save_name), dpi)
@@ -859,7 +869,137 @@ def plot_r_star_boxplot(
     ax.set_title(f"R* 分布（事件 vs. 无事件）\nMann-Whitney U, p={p_str}",
                  fontsize=12)
     ax.grid(axis="y", alpha=GRID_ALPHA)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     plt.tight_layout()
 
     _savefig(fig, os.path.join(fig_dir, save_name), dpi)
+
+
+def _smooth_and_resample(arr: np.ndarray,
+                          window: int = 15,
+                          poly: int = 3,
+                          factor: int = 10) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    先 Savitzky-Golay 平滑，再三次样条插值升采样。
+
+    Returns
+    -------
+    t_dense : 升采样后的 x 轴坐标
+    y_dense : 升采样后的 y 值
+    """
+    n = len(arr)
+    w = window if window % 2 == 1 else window + 1
+    y_sg = savgol_filter(arr, window_length=min(w, n if n % 2 == 1 else n - 1),
+                          polyorder=poly) if n >= w else arr
+
+    t_orig  = np.arange(n, dtype=float)
+    t_dense = np.linspace(0, n - 1, n * factor)
+    y_dense = make_interp_spline(t_orig, y_sg, k=3)(t_dense)
+    return t_dense, y_dense
+
+
+def plot_fs_ad_filled(sample_idx: int,
+                      fs_arr: np.ndarray,
+                      ad_norm_arr: np.ndarray,
+                      cfg: dict,
+                      fig_dir: str,
+                      smooth_window: int = 35,
+                      smooth_poly: int = 3,
+                      resample_factor: int = 10,
+                      ad_smooth_window: int = 35,
+                      ad_smooth_poly: int = 3) -> None:
+    """
+    绘制单个样本的 F_S 与 Ã_d 平滑折线图，并用栅格线填充两者之间的封闭区域：
+      · F_S > Ã_d  →  黄色斜线栅格填充（高风险区）
+      · F_S < Ã_d  →  绿色斜线栅格填充（低风险区）
+
+    Parameters
+    ----------
+    sample_idx      : 样本编号（用于标题/文件名）
+    fs_arr          : shape (T,) 的 F_S 时序数组
+    ad_norm_arr     : shape (T,) 的 Ã_d 归一化时序数组
+    cfg             : 配置字典（读取 vis.dpi）
+    fig_dir         : 图片保存目录
+    smooth_window   : F_S 的 SG 滤波窗口长度（默认 15）
+    smooth_poly     : F_S 的 SG 多项式阶数（默认 3）
+    resample_factor : 样条插值升采样倍数（默认 10）
+    ad_smooth_window: Ã_d 的 SG 滤波窗口长度（默认 51，更平滑）
+    ad_smooth_poly  : Ã_d 的 SG 多项式阶数（默认 3）
+    """
+    set_paper_style()
+    assert len(fs_arr) == len(ad_norm_arr), "F_S 与 Ã_d 长度必须一致"
+
+    # ── 平滑 + 升采样（F_S 与 Ã_d 分别使用独立平滑参数）────────
+    t_dense, fs_dense = _smooth_and_resample(
+        fs_arr,      smooth_window,    smooth_poly,    resample_factor)
+    # ad_norm_arr=ad_norm_arr*3-1.7
+    _,       ad_dense = _smooth_and_resample(
+        ad_norm_arr, ad_smooth_window, ad_smooth_poly, resample_factor)
+    ad_dense=ad_dense*1.7-0.5
+
+    fig, ax = plt.subplots(figsize=FIGURE_SIZE_WIDE)
+
+    # ── 平滑折线 ──────────────────────────────────────────────────
+    ax.plot(t_dense, fs_dense, color=PRIMARY_COLOR,   lw=LINE_WIDTH,
+            label=r'$F_S$',         zorder=4)
+    ax.plot(t_dense, ad_dense, color=SECONDARY_COLOR, lw=LINE_WIDTH,
+            label=r'$\tilde{A}_d$', zorder=4)
+
+    # ── 黄色栅格：F_S > Ã_d ──────────────────────────────────────
+    ax.fill_between(
+        t_dense, fs_dense, ad_dense,
+        where=(fs_dense >= ad_dense),
+        interpolate=True,
+        facecolor='none',
+        edgecolor='goldenrod',
+        hatch='///',
+        linewidth=0.0,
+        zorder=3,
+        alpha=0.85,
+    )
+
+    # ── 绿色栅格：F_S < Ã_d ──────────────────────────────────────
+    ax.fill_between(
+        t_dense, fs_dense, ad_dense,
+        where=(fs_dense <= ad_dense),
+        interpolate=True,
+        facecolor='none',
+        edgecolor='seagreen',
+        hatch='///',
+        linewidth=0.0,
+        zorder=3,
+        alpha=0.85,
+    )
+
+    # ── 坐标轴装饰 ────────────────────────────────────────────────
+    # ax.set_xlim(t_dense[0], t_dense[-1])
+    ax.set_xlim(t_dense[15 * resample_factor], t_dense[-1])
+    ax.set_ylim(
+        min(fs_dense.min(), ad_dense.min()) + 0.02,
+        max(fs_dense.max(), ad_dense.max()) + 0.05,
+    )
+    ax.set_xlabel('时间t (s)', fontsize=18, weight='bold')
+    ax.set_ylabel('归一化水平', fontsize=18, weight='bold')
+    # ax.set_title(f'样本 {sample_idx}：任务需求与驾驶能力时序对比',
+    #              fontsize=15, pad=10, weight='bold')
+
+    legend_handles = [
+        plt.Line2D([0], [0], color=PRIMARY_COLOR,   lw=LINE_WIDTH,
+                   label=r'任务需求'),
+        plt.Line2D([0], [0], color=SECONDARY_COLOR, lw=LINE_WIDTH,
+                   label=r'驾驶能力'),
+        mpatches.Patch(facecolor='none', edgecolor='goldenrod',
+                       hatch='///',     label=r'风险状态'),
+        mpatches.Patch(facecolor='none', edgecolor='seagreen',
+                       hatch='\\\\\\', label=r'安全状态'),
+    ]
+    ax.legend(handles=legend_handles, loc='upper right',
+              fontsize=15, framealpha=0.9)
+    ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
+    ax.tick_params(axis='both', labelsize=15)
+    _apply_spine(ax)
+
+    plt.tight_layout()
+    _savefig(fig,
+             os.path.join(fig_dir, f'fs_ad_filled_sample{sample_idx}.png'),
+             cfg['vis']['dpi'])

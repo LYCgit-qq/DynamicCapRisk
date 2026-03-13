@@ -3,101 +3,74 @@
 ## 目录结构
 
 ```
-driving_capability_risk_assessment/
+DynamicCapRisk/
 ├── README.md                    # 项目说明
 ├── requirements.txt             # 依赖包
-├── STRUCTURE.md                 # 本文件 - 结构说明
-│
 ├── config/                      # 配置文件目录
-│   ├── experiment_config.yaml   # 实验配置（第2章）
-│   ├── model_config.yaml        # 模型配置（第5章）
-│   └── feature_config.yaml      # 特征配置（第3章）
-│
+│   ├── baseline_capability.yaml    # 基准能力评估配置
+│   ├── capability_fluctuation.yaml # 能力波动量配置
+│   ├── dataset.yaml                # 数据集配置
+│   ├── dynamic_capability.yaml     # 动态能力计算配置
+│   ├── evaluator_compare.yaml      # 评估器比较配置
+│   ├── evaluator.yaml              # 评估器配置
+│   ├── risk_evaluator.yaml         # 风险评估器配置
+│   ├── risk_field.yaml             # 风险场强配置
+│   ├── risk_validator.yaml         # 风险验证器配置
+│   ├── trainer_dl.yaml             # 深度学习训练器配置
+│   └── trainer_svr_cart.yaml       # SVR和CART训练器配置
 ├── data/                        # 数据目录
-│   ├── raw/                     # 原始数据
-│   │   ├── driving_simulator/   # 驾驶模拟器数据（60Hz）
-│   │   ├── eye_tracking/        # 眼动追踪数据（120Hz）
-│   │   ├── physiological/       # 生理信号数据（500Hz）
-│   │   └── questionnaire.csv    # 问卷数据
-│   ├── processed/               # 预处理后数据
-│   └── README.md                # 数据说明
-│
-├── src/                         # 源代码目录
-│   ├── data_processing/         # 数据处理模块（第2章）
-│   │   ├── __init__.py
-│   │   ├── data_loader.py       # 数据加载器
-│   │   ├── synchronization.py   # 数据同步
-│   │   ├── preprocessing.py     # 数据预处理
-│   │   └── feature_extraction.py # 特征提取
-│   │
-│   ├── capability_assessment/   # 能力评估模块（第3章）
-│   │   ├── __init__.py
-│   │   ├── questionnaire_processor.py  # 问卷处理
-│   │   ├── baseline_capability.py      # 基准能力评估
-│   │   ├── capability_fluctuation.py   # 能力波动量
-│   │   └── dynamic_capability.py       # 动态能力计算
-│   │
-│   ├── risk_assessment/         # 风险评估模块（第4章）
-│   │   ├── __init__.py
-│   │   ├── risk_field.py        # 风险场强计算
-│   │   ├── tci_model.py         # TCI模型
-│   │   └── risk_evaluator.py    # 风险评估器
-│   │
-│   ├── prediction/              # 预测模块（第5章）
-│   │   ├── __init__.py
-│   │   ├── dataset.py           # 数据集定义
-│   │   ├── trainer.py           # 模型训练器
-│   │   └── evaluator.py         # 模型评估器
-│   │
-│   ├── models/                  # 模型定义
-│   │   ├── __init__.py
-│   │   └── mtjp_model.py        # MT-JP模型
-│   │
-│   ├── utils/                   # 工具函数
-│   │   ├── __init__.py
-│   │   ├── metrics.py           # 评估指标
-│   │   ├── losses.py            # 损失函数
-│   │   └── logger.py            # 日志工具
-│   │
-│   └── visualization/           # 可视化模块
-│       ├── __init__.py
-│       ├── plot_capability.py   # 能力可视化
-│       ├── plot_risk.py         # 风险可视化
-│       └── plot_prediction.py   # 预测结果可视化
-│
-├── notebooks/                   # Jupyter notebooks
-│   ├── 01_data_exploration.ipynb
-│   ├── 02_capability_assessment.ipynb
-│   ├── 03_risk_assessment.ipynb
-│   └── 04_prediction_model.ipynb
-│
-├── tests/                       # 单元测试
-│   ├── test_data_processing.py
-│   ├── test_capability_assessment.py
-│   ├── test_risk_assessment.py
-│   └── test_prediction.py
-│
-├── scripts/                     # 运行脚本
-│   ├── preprocess_data.py       # 数据预处理脚本
-│   ├── run_capability_assessment.py  # 能力评估脚本
-│   ├── run_risk_assessment.py   # 风险评估脚本
-│   ├── train_model.py           # 模型训练脚本
-│   └── evaluate_model.py        # 模型评估脚本
-│
-└── docs/                        # 文档目录
-    ├── data_format.md           # 数据格式说明
-    ├── model_architecture.md    # 模型架构说明
-    └── api_reference.md         # API参考文档
+│   ├── README_AHP.md             # AHP方法说明
+│   ├── README_raw_data.md        # 原始数据说明
+│   ├── README_workzone.md        # 工作区说明
+│   ├── dataset/                  # 数据集文件
+│   │   ├── dataset_stats_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.csv
+│   │   └── mtjp_window_aligned.csv
+│   ├── processed/                # 预处理后数据
+│   │   ├── mtjp_dataset_stats_aug-False.csv
+│   │   ├── mtjp_window_aligned.csv
+│   │   ├── questionnaire_preprocessed.csv
+│   │   ├── questionnaire_standardized.csv
+│   │   ├── test00_continuous.csv
+│   │   ├── test01_continuous.csv
+│   │   └── test02_continuous.csv
+│   └── raw/                      # 原始数据
+│       ├── act.mat               # 行为数据
+│       ├── ahp_afl_judgment_matrix.csv # AHP判断矩阵
+│       ├── ahp_risk_field_main.csv    # 风险场强主权重
+│       ├── ahp_risk_field_sign.csv    # 风险场强符号权重
+│       ├── eye.mat               # 眼动数据
+│       ├── phy.mat               # 生理数据
+│       ├── questionnaire.csv      # 问卷数据
+│       └── 被试-实验ID映射.csv     # 被试映射表
+├── docs/                        # 文档目录
+│   ├── model_architecture.md    # 模型架构说明
+│   ├── PROJECT_OVERVIEW.md      # 项目概览
+│   └── STRUCTURE.md             # 本文件 - 结构说明
+├── output/                      # 输出结果目录
+│   ├── 1_capability_assessment/ # 能力评估结果
+│   ├── 2_risk_assessment/       # 风险评估结果
+│   └── 3_prediction/            # 预测结果
+└── src/                         # 源代码目录
+    ├── __init__.py
+    ├── __pycache__/             # Python缓存文件
+    ├── 1_data_processing/       # 数据处理模块（第2章）
+    ├── 2_capability_assessment/ # 能力评估模块（第3章）
+    ├── 3_risk_assessment/       # 风险评估模块（第4章）
+    ├── 4_prediction/            # 预测模块（第5章）
+    ├── models/                  # 模型定义
+    ├── trash/                   # 废弃代码目录
+    ├── utils/                   # 工具函数
+    └── visualization/           # 可视化模块
 ```
 
 ## 模块对应关系
 
 | 论文章节 | 模块 | 主要功能 |
 |---------|------|---------|
-| 第2章 | data_processing | 数据采集与预处理 |
-| 第3章 | capability_assessment | 动态驾驶能力评估 |
-| 第4章 | risk_assessment | 风险状态评估 |
-| 第5章 | prediction + models | 联合预测模型 |
+| 第2章 | 1_data_processing | 数据采集与预处理 |
+| 第3章 | 2_capability_assessment | 动态驾驶能力评估 |
+| 第4章 | 3_risk_assessment | 风险状态评估 |
+| 第5章 | 4_prediction + models | 联合预测模型 |
 
 ## 核心算法实现
 
@@ -123,42 +96,40 @@ driving_capability_risk_assessment/
 
 ```
 原始数据(raw/) 
-  ↓ [data_loader.py]
+  ↓ [1_data_processing/]
 多模态数据
-  ↓ [synchronization.py]
+  ↓ [数据同步与预处理]
 同步数据（20Hz）
-  ↓ [preprocessing.py]
-清洗标准化数据
-  ↓ [feature_extraction.py]
+  ↓ [特征提取]
 11项驾驶特征
-  ├─→ [capability_assessment/] → 动态能力 Ad
-  ├─→ [risk_assessment/] → 风险度 R, 风险等级
-  └─→ [prediction/] → MT-JP模型 → 预测结果
+  ├─→ [2_capability_assessment/] → 动态能力 Ad
+  ├─→ [3_risk_assessment/] → 风险度 R, 风险等级
+  └─→ [4_prediction/] → MT-JP模型 → 预测结果
 ```
 
 ## 使用流程
 
 ### 1. 数据预处理
 ```bash
-python scripts/preprocess_data.py --config config/experiment_config.yaml
+python -m src.1_data_processing.main --config config/dataset.yaml
 ```
 
 ### 2. 能力评估
 ```bash
-python scripts/run_capability_assessment.py --data data/processed/
+python -m src.2_capability_assessment.main --config config/baseline_capability.yaml
 ```
 
 ### 3. 风险评估
 ```bash
-python scripts/run_risk_assessment.py --data data/processed/
+python -m src.3_risk_assessment.main --config config/risk_evaluator.yaml
 ```
 
 ### 4. 模型训练
 ```bash
-python scripts/train_model.py --config config/model_config.yaml
+python -m src.4_prediction.trainer --config config/trainer_dl.yaml
 ```
 
 ### 5. 模型评估
 ```bash
-python scripts/evaluate_model.py --model checkpoints/best_model.pth
+python -m src.4_prediction.evaluator --config config/evaluator.yaml
 ```

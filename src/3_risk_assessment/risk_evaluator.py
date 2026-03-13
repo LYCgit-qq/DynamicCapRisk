@@ -319,9 +319,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
-  python risk_evaluator.py
-  python risk_evaluator.py -c config/risk_evaluator.yaml
-  python risk_evaluator.py --plot_sample 0
+  python src/3_risk_assessment/risk_evaluator.py
+  python src/3_risk_assessment/risk_evaluator.py -c config/risk_evaluator.yaml
+  python src/3_risk_assessment/risk_evaluator.py --plot_sample 0
         """
     )
     parser.add_argument('-c', '--config', type=str,
@@ -418,8 +418,8 @@ def main():
     # ── 5. 生成图表（调用可视化模块） ────────────────────────────
     from src.visualization.plot_risk import (
         plot_threshold_f1, plot_r_histogram, plot_violin_by_group,
-        plot_line_scenario_group, plot_box_scenario_group,
-        plot_stacked_bar_risk, plot_timeseries_typical, plot_single_sample
+        plot_line_scenario_group, plot_box_scenario_group, plot_stacked_bar_risk,
+        plot_timeseries_typical, plot_single_sample, plot_fs_ad_filled
     )
 
     try:
@@ -441,6 +441,7 @@ def main():
         if 0 <= idx < len(sample_field):
             plot_single_sample(idx, sample_field, fs_temp_list,
                                 ad_norm_list, all_windows, cfg, fig_dir)
+            plot_fs_ad_filled(idx, fs_temp_list[idx], ad_norm_list[idx], cfg, fig_dir)
         else:
             print(f"⚠️  --plot_sample {idx} 超出范围（共 {len(sample_field)} 个）")
 

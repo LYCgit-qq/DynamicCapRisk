@@ -43,5 +43,117 @@
                 "PYTHONPATH": "${workspaceFolder}"
             }
         },
+        {
+            "name": "风险场强计算",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/3_risk_assessment/risk_field.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/risk_field.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "风险度计算",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/3_risk_assessment/risk_evaluator.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/risk_evaluator.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "风险度计算结果验证",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/3_risk_assessment/risk_validator.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/risk_validator.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "数据集构建",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/4_prediction/dataset.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/dataset.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "模型预测（深度模型）",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/4_prediction/trainer_dl.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/trainer_dl.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "模型预测（传统模型）",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/4_prediction/trainer_svr_cart.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/trainer_svr_cart.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "评估预测结果（MTJP）",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/4_prediction/evaluator.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/evaluator.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "评估预测结果（对比）",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/4_prediction/evaluator_compare.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--config", "config/evaluator_compare.yaml"
+            ],
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
     ]
 }
