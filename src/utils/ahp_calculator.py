@@ -132,13 +132,13 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
-python src/utils/ahp_calculator.py -c data/raw/ahp_afl_judgment_matrix.csv -s output/1_capability_assessment/Afl_ahp_weights.csv
+python src/utils/ahp_calculator.py -c data/raw/ahp_afl_judgment_matrix.csv -s output/1_capability_assessment/results/Afl_ahp_weights.csv
 
 # 主层权重：w_veh / w_geo / w_sign
-python src/utils/ahp_calculator.py -c data/raw/ahp_risk_field_main.csv -s output/2_risk_assessment/risk_field_main_weights.csv
+python src/utils/ahp_calculator.py -c data/raw/ahp_risk_field_main.csv -s output/2_risk_assessment/results/risk_field_main_weights.csv
 
 # 设施子层权重：lambda_1(sign_density) / lambda_2(work_zone)
-python src/utils/ahp_calculator.py -c data/raw/ahp_risk_field_sign.csv -s output/2_risk_assessment/risk_field_sign_weights.csv
+python src/utils/ahp_calculator.py -c data/raw/ahp_risk_field_sign.csv -s output/2_risk_assessment/results/risk_field_sign_weights.csv
         """
     )
     parser.add_argument(

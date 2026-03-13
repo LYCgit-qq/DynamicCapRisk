@@ -3,7 +3,7 @@
 | 项               | 说明                                                                 |
 |------------------|----------------------------------------------------------------------|
 | 字段名           | `sample_field`                                                       |
-| 所属文件         | `output/1_capability_assessment/Afl_capability_fluctuation.pkl`      |
+| 所属文件         | `output/1_capability_assessment/results/Afl_capability_fluctuation.pkl`      |
 | 核心作用         | 存储67个样本中每个窗口对应的路段类别（自由路段/施工区类型）|
 | 整体数据类型     | `list`（长度固定为67，与样本数量一一对应）|
 | 列表元素类型     | `numpy.ndarray`（每个数组对应单个样本的所有窗口的路段类别值）|
@@ -27,7 +27,7 @@
 import pickle
 
 # 读取pkl文件
-with open("output/1_capability_assessment/Afl_capability_fluctuation.pkl", "rb") as f:
+with open("output/1_capability_assessment/results/Afl_capability_fluctuation.pkl", "rb") as f:
     result = pickle.load(f)
 
 # 获取sample_field字段

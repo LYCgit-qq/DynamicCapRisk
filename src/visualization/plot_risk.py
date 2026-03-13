@@ -62,6 +62,14 @@ def set_paper_style():
         "axes.spines.right":  True,
         "axes.spines.left":   True,
         "axes.spines.bottom": True,
+        "xtick.direction":    "out",
+        "ytick.direction":    "out",
+        "xtick.major.size":   4.5,
+        "ytick.major.size":   4.5,
+        "xtick.minor.size":   2.5,
+        "ytick.minor.size":   2.5,
+        "xtick.major.width":  1.0,
+        "ytick.major.width":  1.0,
     })
     plt.rcParams.update({
         "font.family":        "sans-serif",
@@ -73,8 +81,8 @@ def set_paper_style():
         "xtick.labelsize":    11,
         "ytick.labelsize":    11,
         "legend.fontsize":    11,
-        "axes.linewidth":     1.2,       # 边框粗细
-        "axes.edgecolor":     "black",   # 边框颜色
+        "axes.linewidth":     1.2,
+        "axes.edgecolor":     "black",
         "lines.linewidth":    LINE_WIDTH,
         "figure.dpi":         150,
         "savefig.dpi":        300,
@@ -88,6 +96,7 @@ def _apply_spine(ax) -> None:
         spine.set_visible(True)
         spine.set_edgecolor('black')
         spine.set_linewidth(1.2)
+    ax.tick_params(axis='both', direction='out', length=4.5, width=1.0)
 
 
 def _save_and_close(fig, save_path, msg=""):
@@ -996,7 +1005,8 @@ def plot_fs_ad_filled(sample_idx: int,
     ax.legend(handles=legend_handles, loc='upper right',
               fontsize=15, framealpha=0.9)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    ax.tick_params(axis='both', labelsize=15)
+    ax.tick_params(axis='both', labelsize=15, direction='out',
+               length=4.5, width=1.0)
     _apply_spine(ax)
 
     plt.tight_layout()

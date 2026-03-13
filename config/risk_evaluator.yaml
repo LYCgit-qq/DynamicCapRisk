@@ -27,8 +27,8 @@ scenarios:
 
 # ── 路径配置 ──────────────────────────────────────────────────
 paths:
-  field_pkl:   'output/1_capability_assessment/Afl_capability_fluctuation.pkl'
-  ad_pkl:      'output/1_capability_assessment/Ad_result.pkl'
+  field_pkl:   'output/1_capability_assessment/results/Afl_capability_fluctuation.pkl'
+  ad_pkl:      'output/1_capability_assessment/results/Ad_result.pkl'
   fs_dir: "output/2_risk_assessment/results"  
   output_csv: "output/2_risk_assessment/results"
   output_fig: "output/2_risk_assessment/figures"

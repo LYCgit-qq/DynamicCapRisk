@@ -27,32 +27,6 @@ def load_config(config_path=None):
         print(f"警告：配置文件{config_path}未找到，使用默认值")
         config = {}
 
-    defaults = {
-        "window_seconds": 3,
-        "sampling_rates": {"act": 60, "eye": 120, "phy": 100},
-        "correlation_threshold": 0.8,
-        "vif_threshold": 10,
-        "fluctuation_k": 0.4,
-        "fluctuation_stats_range": {"min": -0.05, "max": 0.05},
-        "baseline_quantiles": [0, 1 / 3, 2 / 3, 1],
-        "baseline_group_labels": [
-            "low_baseline_group",
-            "medium_baseline_group",
-            "high_baseline_group",
-        ],
-        "data_path": "data/processed/raw_data.pkl",
-        "output_path": "output/1_capability_assessment/Afl_capability_fluctuation.pkl",
-        "visualization_output_dir": "output/1_capability_assessment",
-    }
-
-    for key, val in defaults.items():
-        if key not in config:
-            config[key] = val
-        if isinstance(val, dict) and isinstance(config.get(key), dict):
-            for sub_key, sub_val in val.items():
-                if sub_key not in config[key]:
-                    config[key][sub_key] = sub_val
-
     return config
 
 
@@ -268,7 +242,7 @@ def ahp_weights_adapted(save_path=None):
     """从CSV读取打分生成AHP权重"""
     csv_path = "data/raw/ahp_afl_judgment_matrix.csv"
     if save_path is None:
-        save_path = "output/1_capability_assessment/Afl_ahp_weights.csv"
+        save_path = "output/1_capability_assessment/results/Afl_ahp_weights.csv"
     ahp_weights = calculate_ahp_weights(csv_path=csv_path, save_path=save_path)
     total = sum(ahp_weights.values())
     ahp_weights = {k: v / total for k, v in ahp_weights.items()}
@@ -520,10 +494,10 @@ def main():
 
     data_path = config["data_path"]
     output_path = config["output_path"]
-    outdir = os.path.dirname(output_path)
-
-    if not os.path.isfile(data_path):
-        raise FileNotFoundError(f"input file not found: {data_path}")
+    res_dir = os.path.dirname(output_path)
+    fig_dir = config["visualization_output_dir"]
+    os.makedirs(res_dir, exist_ok=True)
+    os.makedirs(fig_dir, exist_ok=True)
 
     # 1. 加载数据
     act_raw, eye_raw, phy_raw = load_data(data_path)
@@ -582,7 +556,7 @@ def main():
         raise RuntimeError("所有特征被筛选删除，无法继续计算")
 
     # 4. 权重计算
-    ahp_w = ahp_weights_adapted(save_path=os.path.join(outdir, "Afl_ahp_weights.csv"))
+    ahp_w = ahp_weights_adapted(save_path=os.path.join(res_dir, "Afl_ahp_weights.csv"))
     ent_w = entropy_weights(features_final)
     combined_w = combine_weights(ahp_w, ent_w, features_final.columns)
     print(f"\n=== 权重计算完成 ===")
@@ -616,10 +590,6 @@ def main():
             start_idx = end_idx
     assert start_idx == len(A_fl), "拆分后总长度不匹配！"
 
-    # 7. 保存 pkl
-    if outdir and not os.path.isdir(outdir):
-        os.makedirs(outdir, exist_ok=True)
-
     result = {
         "features": features_final,
         "weights": combined_w,
@@ -632,15 +602,15 @@ def main():
     }
     with open(output_path, "wb") as f:
         pickle.dump(result, f)
-    print(f"\n核心结果已保存至: {output_path}")
+    print(f"\nPKL结果已保存至:   {output_path}")
 
     # 8. 保存论文 CSV
-    save_correlation_dropped(dropped_corr, features_df, outdir)
-    save_vif_result(vif_result, outdir)
-    save_feature_weights(ahp_w, ent_w, combined_w, outdir)
-    save_fluctuation_stats(A_fl, outdir, config)
-    save_fluctuation_by_group(A_fl, None, outdir, config)
-    print(f"\n论文所需CSV数据已保存至: {outdir}")
+    save_correlation_dropped(dropped_corr, features_df, res_dir)
+    save_vif_result(vif_result, res_dir)
+    save_feature_weights(ahp_w, ent_w, combined_w, res_dir)
+    save_fluctuation_stats(A_fl, res_dir, config)
+    save_fluctuation_by_group(A_fl, None, res_dir, config)
+    print(f"论文CSV已保存至:   {res_dir}")
 
     # 9. 可视化
     run_all_visualizations(
@@ -648,7 +618,7 @@ def main():
         output_dir=config["visualization_output_dir"],
         config=config,
     )
-    print("可视化完成")
+    print(f"可视化图表将输出至: {fig_dir}")
 
 
 if __name__ == "__main__":

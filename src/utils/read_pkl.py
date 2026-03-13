@@ -34,8 +34,8 @@ def main():
     parser = argparse.ArgumentParser(description='读取指定路径的PKL文件')
     parser.add_argument('-p', '--path', 
                         type=str, 
-                        # default='output/1_capability_assessment/Afl_capability_fluctuation.pkl',
-                        # default='output/1_capability_assessment/Ad_result.pkl',
+                        # default='output/1_capability_assessment/results/Afl_capability_fluctuation.pkl',
+                        # default='output/1_capability_assessment/results/Ad_result.pkl',
                         # default='output/2_risk_assessment/results/risk_list.pkl',
                         default='D:/Local/DynamicCapRisk/output/3_prediction/dataset_aug-False.pkl',
                         help='PKL文件路径')

@@ -48,32 +48,48 @@ SPINE_ALPHA  = 0.4
 
 
 def set_paper_style():
-    """
-    统一论文级绘图风格。
-    所有绘图函数在开头调用一次即可，无需在各函数中重复设置 rcParams。
-    """
-    sns.set_style("whitegrid", {"axes.grid": True, "grid.linestyle": "--"})
+    sns.set_style("whitegrid", {
+        "axes.grid":          True,
+        "grid.linestyle":     "--",
+        "axes.spines.top":    True,
+        "axes.spines.right":  True,
+        "axes.spines.left":   True,
+        "axes.spines.bottom": True,
+        "xtick.direction":    "out",
+        "ytick.direction":    "out",
+        "xtick.major.size":   4.5,
+        "ytick.major.size":   4.5,
+        "xtick.minor.size":   2.5,
+        "ytick.minor.size":   2.5,
+        "xtick.major.width":  1.0,
+        "ytick.major.width":  1.0,
+    })
     plt.rcParams.update({
-        # 字体
         "font.family":        "sans-serif",
         "font.sans-serif":    ["SimSun", "Times New Roman", "DejaVu Sans"],
         "axes.unicode_minus": False,
-        # 尺寸
         "font.size":          12,
         "axes.labelsize":     14,
         "axes.titlesize":     15,
         "xtick.labelsize":    11,
         "ytick.labelsize":    11,
         "legend.fontsize":    11,
-        # 线条
-        "axes.linewidth":     0.8,
+        "axes.linewidth":     1.2,
+        "axes.edgecolor":     "black",
         "lines.linewidth":    LINE_WIDTH,
-        # 分辨率
         "figure.dpi":         150,
         "savefig.dpi":        300,
         "savefig.bbox":       "tight",
         "savefig.format":     "png",
     })
+
+
+def _apply_spine(ax) -> None:
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_edgecolor('black')
+        spine.set_linewidth(1.2)
+    ax.tick_params(axis='both', direction='out', length=4.5, width=1.0)
 
 
 def _save_and_close(fig, save_path, msg=""):
@@ -110,7 +126,7 @@ def plot_pca_visualization(X: pd.DataFrame, labels: pd.Series, output_dir: Path)
     ax.set_title("基准驾驶能力聚类结果可视化（PCA 降维）")
     ax.legend(framealpha=0.9)
     ax.grid(alpha=GRID_ALPHA, linestyle="--")
-    sns.despine(ax=ax, left=False, bottom=False)
+    _apply_spine(ax)
 
     save_path = output_dir / "Ab_cluster_pca_visualization.png"
     _save_and_close(fig, save_path, "PCA 可视化图")
@@ -179,7 +195,7 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
         ax.set_ylabel(ylabel)
         ax.set_title(ylabel)
         ax.grid(alpha=GRID_ALPHA, linestyle="--")
-        sns.despine(ax=ax)
+        _apply_spine(ax)
 
     plt.tight_layout()
     save_path = output_dir / "Ab_cluster_metrics_visualization.png"
@@ -287,7 +303,7 @@ def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
     ax.set_ylabel("频次")
     ax.set_title("驾驶能力波动量分布")
     ax.legend(loc="upper left", framealpha=0.9, fontsize=10)
-    sns.despine(ax=ax)
+    _apply_spine(ax)
 
     _save_and_close(fig, save_path, "波动量分布图")
 
@@ -387,7 +403,7 @@ def plot_grouped_boxplot(fluctuation_sample, config, save_path=None):
     ax.set_title("不同真实能力等级的驾驶能力波动量")
     ax.tick_params(axis="x", labelsize=13)
     ax.grid(axis="y", alpha=GRID_ALPHA, linestyle="--")
-    sns.despine(ax=ax)
+    _apply_spine(ax)
 
     _save_and_close(fig, save_path, "箱线图")
 
@@ -459,7 +475,7 @@ def plot_grouped_boxplot_abs(fluctuation_arr, n_groups=3, save_path=None):
     ax.set_title("不同基准能力组的驾驶能力波动量")
     ax.tick_params(axis="x", labelsize=13)
     ax.grid(axis="y", alpha=GRID_ALPHA, linestyle="--")
-    sns.despine(ax=ax)
+    _apply_spine(ax)
 
     _save_and_close(fig, save_path, "分组箱线图")
 
@@ -539,7 +555,7 @@ def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, conf
     ax.set_title("动态驾驶能力量化值整体分布")
     ax.legend(framealpha=0.9)
     ax.grid(axis="y", alpha=GRID_ALPHA, linestyle="--")
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     _save_and_close(fig, os.path.join(out_dir, "Ad_global_distribution.png"), "Ad 分布图")
 
     # ---- 图2：32 名驾驶人均值散点图 ----
@@ -576,7 +592,7 @@ def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, conf
     ax.legend(title="基准能力等级", framealpha=0.9)
     ax.grid(alpha=GRID_ALPHA, linestyle="--")
     ax.set_xticks(range(1, 33))
-    sns.despine(ax=ax)
+    _apply_spine(ax)
     _save_and_close(fig, os.path.join(out_dir, "Ad_32_subjects_mean_distribution.png"), "Ad 均值散点图")
 
     print("\n📸 已生成：\n  1. 动态能力全局分布直方图\n  2. 32 名驾驶人动态能力均值分布图")

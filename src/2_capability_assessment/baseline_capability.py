@@ -408,8 +408,11 @@ def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
 
 
 def evaluate_benchmark_driving_ability(config: Dict[str, Any]):
-    out = config["output_path"]
-    out.mkdir(parents=True, exist_ok=True)
+    out     = config["output_path"]
+    fig_dir = out / "figures"
+    res_dir = out / "results"
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    res_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. 加载标准化数据
     logging.info("正在加载标准化数据...")
@@ -417,7 +420,7 @@ def evaluate_benchmark_driving_ability(config: Dict[str, Any]):
     logging.info("数据加载完成，形状: %s", X.shape)
 
     # 2. 确定最佳聚类数目
-    best_k, eval_df = find_best_k(X, out, config)
+    best_k, eval_df = find_best_k(X, res_dir, config)
     logging.info("最佳聚类数目确定为: k=%d", best_k)
 
     # 3. 执行 K-means++ 聚类
@@ -445,11 +448,11 @@ def evaluate_benchmark_driving_ability(config: Dict[str, Any]):
     abc_df = compute_individualized_abc(X, labels, centers, config)
 
     # 8. 保存结果
-    labels.to_csv(out / "Ab_cluster_labels.csv", encoding="utf-8-sig", header=["能力等级"])
-    centers.to_csv(out / "Ab_cluster_centers_all_indicators.csv", encoding="utf-8-sig")
-    key_centers.to_csv(out / "Ab_cluster_key_centers.csv", encoding="utf-8-sig")
-    benchmark_result.to_csv(out / "Ab_quantification.csv", encoding="utf-8-sig")
-    abc_df.to_csv(out / "Abc_individualized_baseline_ability.csv",
+    labels.to_csv(res_dir / "Ab_cluster_labels.csv", encoding="utf-8-sig", header=["能力等级"])
+    centers.to_csv(res_dir / "Ab_cluster_centers_all_indicators.csv", encoding="utf-8-sig")
+    key_centers.to_csv(res_dir / "Ab_cluster_key_centers.csv", encoding="utf-8-sig")
+    benchmark_result.to_csv(res_dir / "Ab_quantification.csv", encoding="utf-8-sig")
+    abc_df.to_csv(res_dir / "Abc_individualized_baseline_ability.csv",
                   index=False, encoding="utf-8-sig")
 
     # 打印 Abc 描述性统计
@@ -464,10 +467,10 @@ def evaluate_benchmark_driving_ability(config: Dict[str, Any]):
     logging.info("=" * 60)
 
     # 9. 可视化
-    plot_cluster_metrics(eval_df, out, best_k=config["best_k"])
-    plot_pca_visualization(X, labels, out)
-    plot_pca_3d_visualization(X, labels, out)
-    plot_abc_distribution(abc_df, out)
+    plot_cluster_metrics(eval_df, fig_dir, best_k=config["best_k"])
+    plot_pca_visualization(X, labels, fig_dir)
+    plot_pca_3d_visualization(X, labels, fig_dir)
+    plot_abc_distribution(abc_df, fig_dir)
 
     # 10. 打印结果摘要
     logging.info("=" * 60)

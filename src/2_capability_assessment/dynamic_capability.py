@@ -41,15 +41,18 @@ def load_config():
     if args.ab_mode:    config["calculation"]["ab_mode"] = args.ab_mode
 
     BASE_DIR = config["base_dir"]
+
     config["full_paths"] = {
-        "ab_csv":           os.path.join(BASE_DIR, config["paths"]["ab_csv"]),
-        "abc_csv":          os.path.join(BASE_DIR, config["paths"].get("abc_csv", "")),
-        "afl_pkl":          os.path.join(BASE_DIR, config["paths"]["afl_pkl"]),
-        "subject_exp_csv":  os.path.join(BASE_DIR, config["paths"]["subject_exp_csv"]),
-        "cluster_label_csv":os.path.join(BASE_DIR, config["paths"]["cluster_label_csv"]),
-        "output_dir":       os.path.join(BASE_DIR, config["paths"]["output_dir"]),
+        "ab_csv":            os.path.join(BASE_DIR, config["paths"]["ab_csv"]),
+        "abc_csv":           os.path.join(BASE_DIR, config["paths"].get("abc_csv", "")),
+        "afl_pkl":           os.path.join(BASE_DIR, config["paths"]["afl_pkl"]),
+        "subject_exp_csv":   os.path.join(BASE_DIR, config["paths"]["subject_exp_csv"]),
+        "cluster_label_csv": os.path.join(BASE_DIR, config["paths"]["cluster_label_csv"]),
+        "output_dir": os.path.join(BASE_DIR, config["paths"]["output_dir"]),
+        "fig_dir":    os.path.join(BASE_DIR, config["paths"]["fig_dir"]),
     }
     os.makedirs(config["full_paths"]["output_dir"], exist_ok=True)
+    os.makedirs(config["full_paths"]["fig_dir"],    exist_ok=True)
 
     ab_mode = config["calculation"].get("ab_mode", "Ab")
     print(f"✅ 配置加载完成（基准能力模式：{ab_mode}）")
@@ -365,7 +368,15 @@ if __name__ == "__main__":
         )
 
     validate_dict = validate_results(all_dynamic_cap, config)
-    visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, config)
-    save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stats, validate_dict, config)
+    viz_config = {
+        **config,
+        "full_paths": {
+            **config["full_paths"],
+            "output_dir": config["full_paths"]["fig_dir"],
+        },
+    }
+    visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, viz_config)
+    save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df,
+                group_stats, validate_dict, config)
     
     print("\n===== 动态驾驶能力计算完成 =====")

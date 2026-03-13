@@ -3,12 +3,13 @@
 base_dir: "D:/Local/DynamicCapRisk/"
 
 paths:
-  ab_csv:            "output/1_capability_assessment/Ab_quantification.csv"
-  abc_csv:           "output/1_capability_assessment/Abc_individualized_baseline_ability.csv"
-  afl_pkl:           "output/1_capability_assessment/Afl_capability_fluctuation.pkl"
+  ab_csv:            "output/1_capability_assessment/results/Ab_quantification.csv"
+  abc_csv:           "output/1_capability_assessment/results/Abc_individualized_baseline_ability.csv"
+  afl_pkl:           "output/1_capability_assessment/results/Afl_capability_fluctuation.pkl"
   subject_exp_csv:   "data/raw/被试-实验ID映射.csv"
-  cluster_label_csv: "output/1_capability_assessment/Ab_cluster_labels.csv"
-  output_dir:        "output/1_capability_assessment"
+  cluster_label_csv: "output/1_capability_assessment/results/Ab_cluster_labels.csv"
+  output_dir: "output/1_capability_assessment/results"
+  fig_dir:    "output/1_capability_assessment/figures"
 
 calculation:
   # ── 基准能力模式 ──────────────────────────────────────────────────
