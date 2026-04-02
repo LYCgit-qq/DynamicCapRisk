@@ -16,5 +16,6 @@ key_indicators:
   - 施工区安全感
 
 # 路径配置（默认值，可被命令行参数覆盖）
+# input_path: "data/processed/questionnaire_augmented_standardized.pkl"
 input_path: "data/processed/questionnaire_standardized.pkl"
 output_path: "output/1_capability_assessment"

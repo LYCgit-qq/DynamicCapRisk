@@ -1000,7 +1000,7 @@ def plot_fs_ad_filled(sample_idx: int,
         mpatches.Patch(facecolor='none', edgecolor='goldenrod',
                        hatch='///',     label=r'风险状态'),
         mpatches.Patch(facecolor='none', edgecolor='seagreen',
-                       hatch='\\\\\\', label=r'安全状态'),
+                       hatch='///', label=r'安全状态'),
     ]
     ax.legend(handles=legend_handles, loc='upper right',
               fontsize=15, framealpha=0.9)

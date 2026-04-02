@@ -10,13 +10,10 @@
 或者在代码中：
     from src.1_data_processing.read_questionnaire import load_questionnaire, to_dict, save_pickle
 """
+
 from pathlib import Path
 from typing import Dict, Any, List
-
-try:
-    import pandas as pd
-except Exception:
-    pd = None
+import pandas as pd
 
 
 def load_questionnaire(csv_path: str = "data/raw/questionnaire.csv") -> pd.DataFrame:
@@ -33,7 +30,9 @@ def load_questionnaire(csv_path: str = "data/raw/questionnaire.csv") -> pd.DataF
         FileNotFoundError: 若文件不存在
     """
     if pd is None:
-        raise RuntimeError("pandas is required to read CSV. Install with: pip install pandas")
+        raise RuntimeError(
+            "pandas is required to read CSV. Install with: pip install pandas"
+        )
 
     p = Path(csv_path)
     if not p.exists():
@@ -60,7 +59,9 @@ def to_dict(df: pd.DataFrame) -> Dict[str, List[Any]]:
     return {str(idx): df.loc[idx].tolist() for idx in df.index}
 
 
-def save_pickle(df: pd.DataFrame, out_path: str = "data/processed/questionnaire.pkl") -> str:
+def save_pickle(
+    df: pd.DataFrame, out_path: str = "data/processed/questionnaire.pkl"
+) -> str:
     """将 DataFrame 保存为 pickle 文件（自动创建目录）。返回保存路径。"""
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -79,7 +80,9 @@ def main() -> None:
         print(e)
         return
 
-    print(f"Loaded questionnaire: questions={len(df.index)}, respondents={len(df.columns)}")
+    print(
+        f"Loaded questionnaire: questions={len(df.index)}, respondents={len(df.columns)}"
+    )
     print("First 5 questions:")
     for q in list(df.index)[:5]:
         row = df.loc[q]

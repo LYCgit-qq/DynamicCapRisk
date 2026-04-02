@@ -165,7 +165,107 @@ def plot_pca_3d_visualization(X: pd.DataFrame, labels: pd.Series, output_dir: Pa
     logging.info("3D PCA可视化图已保存至: %s", save_path)
 
 
-def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = None):
+def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
+    """
+    Abc 分布可视化，生成三张图：
+
+    Abc_dist_histogram.png  — 直方图 + KDE + 正态性检验结果
+    Abc_dist_by_group.png   — 按能力等级分组的小提琴图 + 散点
+    Abc_dist_scatter.png    — 按被试 ID 排列的散点图（能力等级着色）
+    """
+    from scipy.stats import shapiro  # 修复：缺失正态性检验导入
+    set_paper_style()
+    os.makedirs(output_dir, exist_ok=True)
+    id_col  = "被试ID" if "被试ID" in abc_df.columns else "实验ID"
+    abc_arr = abc_df["Abc"].values
+    mean_v  = abc_arr.mean()
+    std_v   = abc_arr.std()
+
+    # ── 图1：直方图 + KDE ──────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.histplot(abc_arr, bins=12, kde=True, color=PRIMARY_COLOR,
+                 edgecolor="white", linewidth=0.4, alpha=0.75, ax=ax,
+                 line_kws={"linewidth": 1.8, "color": PRIMARY_COLOR})
+    ax.axvline(mean_v, color=SECONDARY_COLOR, linestyle="--", linewidth=1.8,
+               label=f"均值 {mean_v:.4f}")
+    ax.axvspan(mean_v - std_v, mean_v + std_v, color=LIGHT_FILL, alpha=0.45,  # 修复：LIGHT_FILL
+               label=f"±1σ  [{mean_v - std_v:.4f}, {mean_v + std_v:.4f}]")
+
+    # Shapiro-Wilk 正态性检验
+    if len(abc_arr) >= 3:
+        stat_w, p_sw = shapiro(abc_arr)
+        sw_text = f"Shapiro-Wilk: W={stat_w:.4f}, p={p_sw:.4f}"
+        normal_hint = "（近似正态 ✓）" if p_sw > 0.05 else "（拒绝正态）"
+        ax.text(0.97, 0.95, f"{sw_text}\n{normal_hint}",
+                transform=ax.transAxes, ha="right", va="top", fontsize=10,
+                bbox=dict(facecolor="white", edgecolor="#CCCCCC",
+                          alpha=0.85, boxstyle="round,pad=0.4"))
+
+    ax.set_xlabel("个体化基准能力值 $A_{bc}$")
+    ax.set_ylabel("频次")
+    ax.set_title("个体化基准驾驶能力值 $A_{bc}$ 分布")
+    ax.legend(framealpha=0.9, fontsize=10)
+    sns.despine(ax=ax)
+    path1 = output_dir / "Abc_dist_histogram.png"
+    fig.savefig(path1, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    logging.info("Abc 直方图已保存：%s", path1)
+
+    # ── 图2：分组小提琴图 + 散点 ───────────────────────────────────
+    ordered = [g for g in ["高能力组", "中能力组", "低能力组"]
+               if g in abc_df["能力等级"].values]
+    if ordered:
+        abc_df["能力等级"] = pd.Categorical(abc_df["能力等级"],
+                                            categories=ordered, ordered=True)
+        palette = {g: GROUP_PALETTE.get(g, PRIMARY_COLOR) for g in ordered}  # 修复：GROUP_PALETTE
+
+        fig, ax = plt.subplots(figsize=(9, 6))
+        sns.violinplot(x="能力等级", y="Abc", data=abc_df,
+                       palette=palette, inner=None, width=0.7,
+                       linewidth=1.2, ax=ax, hue="能力等级", legend=False)
+        sns.stripplot(x="能力等级", y="Abc", data=abc_df,
+                      color="white", edgecolor="gray", linewidth=0.6,
+                      size=6, jitter=True, ax=ax, zorder=3)
+        # 均值标注
+        for i, grp in enumerate(ordered):
+            mv = abc_df[abc_df["能力等级"] == grp]["Abc"].mean()
+            ax.scatter(i, mv, color=SECONDARY_COLOR, marker="^",
+                       s=80, zorder=5, linewidths=0)
+
+        ax.set_xlabel("")
+        ax.set_ylabel("个体化基准能力值 $A_{bc}$")
+        ax.set_title("不同能力等级的 $A_{bc}$ 分布（小提琴图）")
+        ax.tick_params(axis="x", labelsize=13)
+        ax.grid(axis="y", alpha=0.3, linestyle="--")
+        sns.despine(ax=ax)
+        path2 = output_dir / "Abc_dist_by_group.png"
+        fig.savefig(path2, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        logging.info("Abc 分组小提琴图已保存：%s", path2)
+
+    # ── 图3：被试级散点图 ──────────────────────────────────────────
+    plot_df = abc_df.sort_values(id_col).copy()
+    fig, ax = plt.subplots(figsize=(11, 5))
+    for grp in ordered:
+        sub = plot_df[plot_df["能力等级"] == grp]
+        ax.scatter(sub[id_col], sub["Abc"],
+                   color=GROUP_PALETTE.get(grp, PRIMARY_COLOR), label=grp,  # 修复
+                   s=70, alpha=0.85, edgecolors="white", linewidths=0.4, zorder=3)
+    ax.axhline(mean_v, color=SECONDARY_COLOR, linestyle="--",
+               linewidth=1.4, label=f"总均值 {mean_v:.4f}")
+    ax.set_xlabel(f"{'被试' if id_col == '被试ID' else '实验'} ID")
+    ax.set_ylabel("个体化基准能力值 $A_{bc}$")
+    ax.set_title("各被试个体化基准驾驶能力值 $A_{bc}$")
+    ax.legend(framealpha=0.9, fontsize=10)
+    ax.grid(alpha=0.3, linestyle="--")
+    sns.despine(ax=ax)
+    path3 = output_dir / "Abc_dist_scatter.png"
+    fig.savefig(path3, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    logging.info("Abc 散点图已保存：%s", path3)
+
+
+def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = None, plot_ch: bool = False):
     """聚类评价指标可视化（SC / CH / DBI 三联图，统一风格）"""
     set_paper_style()
 
@@ -174,14 +274,15 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
     ch_vals  = eval_df["CH指数"].values
     dbi_vals = eval_df["DBI指数"].values
 
-    metric_cfg = [
-        ("轮廓系数 SC", sc_vals,  "o"),
-        ("CH 指数",    ch_vals,  "s"),
-        ("DBI 指数",   dbi_vals, "^"),
-    ]
+    # 动态配置指标：控制是否绘制CH
+    metric_cfg = [("轮廓系数 SC", sc_vals, "o")]
+    if plot_ch:
+        metric_cfg.append(("CH 指数", ch_vals, "o"))
+    metric_cfg.append(("DBI 指数", dbi_vals, "o"))
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    fig.suptitle("聚类评价指标对比（k = 2 ~ 9）", fontsize=15, y=1.01)
+    # 动态设置子图数量
+    n_cols = len(metric_cfg)
+    fig, axes = plt.subplots(1, n_cols, figsize=(18, 5) if plot_ch else (12, 5))
 
     for ax, (ylabel, vals, marker) in zip(axes, metric_cfg):
         ax.plot(k_vals, vals, marker=marker, linewidth=LINE_WIDTH,
@@ -190,10 +291,12 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
             idx = list(k_vals).index(best_k)
             ax.scatter(best_k, vals[idx], color=SECONDARY_COLOR,
                        s=120, zorder=5, label=f"最优 k={best_k}", marker="*")
-            ax.legend(framealpha=0.9)
-        ax.set_xlabel("聚类数目 k")
-        ax.set_ylabel(ylabel)
-        ax.set_title(ylabel)
+            ax.legend(framealpha=0.9, fontsize=14)
+        
+        ax.set_xlabel("聚类数目 k", fontsize=20)
+        ax.set_ylabel(ylabel, fontsize=20)
+        ax.tick_params(axis='both', labelsize=14)
+        
         ax.grid(alpha=GRID_ALPHA, linestyle="--")
         _apply_spine(ax)
 
