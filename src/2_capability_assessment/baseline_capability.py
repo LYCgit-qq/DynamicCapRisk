@@ -25,6 +25,7 @@ from src.visualization.plot_capability import (
     plot_pca_3d_visualization,
     plot_cluster_metrics,
     plot_abc_distribution,
+    plot_radar_visualization,
 )
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -114,6 +115,15 @@ def cluster_analysis(X: pd.DataFrame, k: int, config: Dict[str, Any]):
     )
     labels = kmeans.fit_predict(X)
     centers = pd.DataFrame(kmeans.cluster_centers_, columns=X.columns)
+
+    # ===================== 计算初始中心最小距离 =====================
+    from scipy.spatial.distance import pdist
+    # 计算所有聚类中心两两之间的欧氏距离
+    center_distances = pdist(kmeans.cluster_centers_, metric='euclidean')
+    # 取最小距离（使用numpy的min，正确写法）
+    min_center_distance = np.min(center_distances)
+    logging.info(f"k-means++ 聚类中心最小欧式距离: {min_center_distance:.4f}")
+    # ===============================================================
 
     cluster_means = X.groupby(labels).mean()
     sort_score = cluster_means[config["key_indicators"]].mean(axis=1)
@@ -387,6 +397,7 @@ def evaluate_benchmark_driving_ability(config: Dict[str, Any]):
     plot_cluster_metrics(eval_df, fig_dir, best_k=config["best_k"])
     plot_pca_visualization(X, labels, fig_dir)
     plot_pca_3d_visualization(X, labels, fig_dir)
+    plot_radar_visualization(centers, fig_dir, config)
     plot_abc_distribution(abc_df, fig_dir)
 
     # 10. 打印结果摘要

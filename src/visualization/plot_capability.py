@@ -13,6 +13,7 @@ from sklearn.decomposition import PCA
 import numpy as np
 import seaborn as sns
 from scipy import stats
+import matplotlib.patches as mpatches
 
 RANDOM_STATE = 42
 
@@ -165,6 +166,94 @@ def plot_pca_3d_visualization(X: pd.DataFrame, labels: pd.Series, output_dir: Pa
     logging.info("3D PCA可视化图已保存至: %s", save_path)
 
 
+
+# ── 默认聚类中心数据（表3.4）────────────────────────────────────
+_DEFAULT_CENTERS = pd.DataFrame(
+    {
+        "驾龄":         [0.68, -0.08, -0.23],
+        "每周开车频率":  [0.37, -0.15, -0.25],
+        "限速遵守度":    [0.22, -0.35,  0.25],
+        "换道观察充分性": [0.71, -0.36,  0.04],
+        "情绪稳定性":    [1.00,  0.39, -0.85],
+        "施工区安全感":  [1.33,  0.03, -0.64],
+    },
+    index=["高能力组", "中能力组", "低能力组"],
+)
+
+
+def plot_radar_visualization(
+    centers: "pd.DataFrame | None",
+    output_dir: Path,
+    config: dict,
+    use_default_data: bool = True,
+) -> None:
+    if use_default_data or centers is None:
+        centers = _DEFAULT_CENTERS.copy()
+        if not config.get("key_indicators"):
+            config = {**config, "key_indicators": _DEFAULT_CENTERS.columns.tolist()}
+
+    set_paper_style()
+
+    key_cols = config["key_indicators"]
+    cols = [c for c in key_cols if c in centers.columns]
+    if not cols:
+        logging.warning("key_indicators 中没有匹配 centers 的列，跳过雷达图绘制")
+        return
+
+    label_map   = config.get("feature_label_map", {})
+    _default_label_map = {"换道观察充分性": "换道观察"}
+    axis_labels = [label_map.get(c, _default_label_map.get(c, c)) for c in cols]
+
+    n_axis = len(cols)
+    angles = np.linspace(0, 2 * np.pi, n_axis, endpoint=False).tolist()
+    angles += angles[:1]
+
+    group_order = [g for g in ["高能力组", "中能力组", "低能力组"] if g in centers.index]
+    if not group_order:
+        group_order = centers.index.tolist()
+
+    color_map = {"高能力组": "#2C5F8A", "中能力组": "#4CAF82", "低能力组": "#E07B39"}
+
+    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+
+    for group in group_order:
+        values = centers.loc[group, cols].values.tolist() + [centers.loc[group, cols].values[0]]
+        color  = color_map.get(group, PRIMARY_COLOR)
+        ax.plot(angles, values, color=color, linestyle="-",
+                linewidth=LINE_WIDTH, marker="o", markersize=MARKER_SIZE, label=group)
+        ax.fill(angles, values, color=color, alpha=0.10)
+
+    ax.set_thetagrids(np.degrees(angles[:-1]), labels=axis_labels, fontsize=17)
+    ax.tick_params(axis="x", pad=28)  # 轴标签与圆圈边缘的间距
+
+    all_vals = centers[cols].values.flatten()
+    r_min = min(float(np.floor(all_vals.min() * 4) / 4), -0.5)
+    r_max = max(float(np.ceil(all_vals.max()  * 4) / 4),  1.5)
+    step  = 0.5 if (r_max - r_min) <= 2.5 else 1.0
+    r_ticks = np.arange(r_min, r_max + step * 0.1, step).round(2)
+
+    ax.set_ylim(r_min - 0.1, r_max + 0.1)
+    ax.set_yticks(r_ticks)
+    ax.set_yticklabels([f"{v:.1f}" for v in r_ticks], fontsize=12, color="gray")
+    ax.yaxis.set_tick_params(pad=2)
+
+    ax.grid(color="gray", linestyle="--", linewidth=0.6, alpha=GRID_ALPHA)
+    ax.spines["polar"].set_linewidth(0.8)
+    ax.spines["polar"].set_color("black")
+
+    ax.plot(angles, [0.0] * (n_axis + 1),
+            color="#E53935", linestyle=":", linewidth=1.4, alpha=0.75, label="样本均值（0）")
+    ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15),
+              framealpha=0.9, fontsize=14, title="能力分组", title_fontsize=14)
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_path = output_dir / "Ab_cluster_radar_visualization.png"
+    fig.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    logging.info("雷达图已保存至: %s", save_path)
+
+
 def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
     """
     Abc 分布可视化，生成三张图：
@@ -307,52 +396,71 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
 
 
 # ====================== 波动量计算模块 ======================
-
-def plot_correlation_heatmap(features_df, save_path=None):
-    """特征 Pearson 相关性热力图（统一风格）"""
+def plot_correlation_heatmap(features_df, save_path, title):
+    """
+    通用 Pearson 相关性热力图绘制（自适应筛选前/后）
+    :param features_df: 特征DataFrame（原始/筛选后）
+    :param save_path: 图片保存路径
+    :param title: 图表标题（区分筛选前/后）
+    """
     if features_df.empty or len(features_df.columns) < 2:
-        print("特征数据为空或特征数 < 2，跳过相关性热力图绘制")
+        print(f"特征数量不足，跳过：{title}")
         return
 
+    # 完整全覆盖 中文特征映射
     feat_name_map = {
-        "steering_angle":    "方向盘转角",
+        # 操纵行为
+        "steering_angle": "方向盘转角",
         "steering_velocity": "方向盘角速度",
-        "brake_pedal":       "制动踏板开度",
-        "throttle_pedal":    "油门踏板开度",
-        "longitudinal_accel":"纵向加速度",
-        "lateral_offset":    "横向偏移量",
-        "lateral_accel":     "横向加速度",
-        "vehicle_speed":     "车速",
-        "gaze_dispersion":   "注视点分散度",
-        "blink_frequency":   "眨眼频率",
-        "hrv":               "心率变异性",
-        "bvp":               "血容量脉搏",
-        "ecg":               "心电信号",
-        "resp":              "呼吸信号",
+        "brake_pedal": "制动踏板开度",
+        "throttle_pedal": "油门踏板开度",
+        # 车辆响应
+        "vehicle_speed": "车速",
+        "longitudinal_accel": "纵向加速度",
+        "lateral_accel": "横向加速度",
+        "lateral_offset": "横向偏移量",
+        "vehicle_x": "车辆X坐标",
+        "vehicle_y": "车辆Y坐标",
+        # 眼动认知
+        "blink_frequency": "眨眼频率",
+        "blink_std": "眨眼标准差",
+        "gaze_x": "注视点X坐标",
+        "gaze_y": "注视点Y坐标",
+        "gaze_dispersion": "注视点分散度",
+        "pupil_diameter": "瞳孔直径",
+        # 生理状态
+        "bvp": "血容量脉搏",
+        "ecg": "心电信号",
+        "resp": "呼吸信号",
+        "hr": "心率均值",
+        "hrv": "心率变异性",
+        "scl": "皮肤电导水平"
     }
 
     set_paper_style()
     corr_mat = features_df.corr()
-    corr_mat.index   = [feat_name_map.get(n, n) for n in corr_mat.index]
-    corr_mat.columns = [feat_name_map.get(n, n) for n in corr_mat.columns]
+    # 自动中文翻译
+    corr_mat.index = [feat_name_map.get(c, c) for c in corr_mat.index]
+    corr_mat.columns = [feat_name_map.get(c, c) for c in corr_mat.columns]
 
-    n_feat   = len(features_df.columns)
-    fig_size = (max(10, n_feat * 0.85), max(8, n_feat * 0.75))
-    fig, ax  = plt.subplots(figsize=fig_size)
+    # 自适应画布大小
+    n = len(corr_mat)
+    fig, ax = plt.subplots(figsize=(max(12, n * 0.9), max(10, n * 0.8)))
 
-    # 使用与主色调一致的冷暖色系
+    # 论文配色
     cmap = sns.diverging_palette(220, 20, as_cmap=True)
     sns.heatmap(
         corr_mat, annot=True, fmt=".2f", cmap=cmap,
         vmin=-1, vmax=1, square=True,
         cbar_kws={"shrink": 0.8, "label": "Pearson 相关系数"},
-        annot_kws={"size": 9}, linewidths=0.3, linecolor="#CCCCCC",
-        ax=ax,
+        annot_kws={"size": 9 if n <= 15 else 7},
+        linewidths=0.3, linecolor="#CCC"
     )
-    ax.set_title("驾驶特征 Pearson 相关性热力图", pad=16)
-    ax.tick_params(axis="both", labelsize=10)
 
-    _save_and_close(fig, save_path, "相关性热力图")
+    ax.set_title(title, fontsize=14, pad=20)
+    ax.tick_params(labelsize=10)
+    plt.tight_layout()
+    _save_and_close(fig, save_path, title)
 
 
 def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
@@ -587,6 +695,7 @@ def plot_grouped_boxplot_abs(fluctuation_arr, n_groups=3, save_path=None):
 
 def run_all_visualizations(
     result_pkl_path,
+    features_df_before_filter,
     output_dir="output/figs",
     config="config/capability_fluctuation.yaml",
 ):
@@ -614,9 +723,22 @@ def run_all_visualizations(
     output_dir = Path(output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
+    # ====================== 绘制两张相关性热力图 ======================
+    # 1. 筛选前 → 全部原始特征
+    heatmap_before_path = os.path.join(output_dir, "correlation_heatmap_before_filter.png")
     plot_correlation_heatmap(
-        features_df, save_path=output_dir / "Afl_corr_heatmap.png"
+        features_df_before_filter,  # 筛选前全部特征
+        save_path=heatmap_before_path,
+        title="驾驶特征 Pearson 相关性热力图（筛选前）"
     )
+    # 2. 筛选后 → 最终保留特征
+    heatmap_after_path = os.path.join(output_dir, "correlation_heatmap_after_filter.png")
+    plot_correlation_heatmap(
+        result["features"],  # 筛选后最终特征
+        save_path=heatmap_after_path,
+        title="驾驶特征 Pearson 相关性热力图（筛选后）"
+    )
+
     plot_fluctuation_distribution(
         fluctuation_arr, save_path=output_dir / "Afl_fluctuation_dist.png"
     )

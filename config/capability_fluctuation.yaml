@@ -1,5 +1,7 @@
 # 路径配置
-data_path: "data/processed/raw_data.pkl"
+# data_path: "data/processed/raw_data.pkl"
+# data_path: "data/processed/raw_data_22.pkl"
+data_path: "data/processed/raw_data_20.pkl"
 output_path: "output/1_capability_assessment/results/Afl_capability_fluctuation.pkl"
 visualization_output_dir: "output/1_capability_assessment/figures"
 subject_exp_map_csv: "data/raw/被试-实验ID映射.csv"  # 被试-实验ID映射文件

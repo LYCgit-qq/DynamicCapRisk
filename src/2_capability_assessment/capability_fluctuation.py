@@ -30,6 +30,102 @@ def load_config(config_path=None):
     return config
 
 
+# ====================== 版本检测 ======================
+# 两套数据的列索引映射
+COLUMN_MAPS = {
+    "standard": {
+        "act": {
+            "throttle_pedal":    0,
+            "brake_pedal":       1,
+            "steering_angle":    2,
+            "vehicle_speed":     3,
+            "longitudinal_accel":4,
+            "lateral_accel":     5,
+            "lateral_offset":    8,
+            # vehicle_x / vehicle_y 不存在，留空
+        },
+        "eye": {
+            "blink_frequency":   0,
+            "gaze_x":            1,
+            "gaze_y":            2,
+            # pupil_diameter 不存在
+        },
+        "phy": {
+            "bvp":   0,
+            "ecg":   1,
+            "resp":  2,
+            "hr":    3,
+            "hrv":   4,
+            # scl 不存在
+        },
+    },
+    "22": {
+        "act": {
+            "throttle_pedal":    0,
+            "brake_pedal":       1,
+            "steering_angle":    2,
+            "vehicle_speed":     3,
+            "longitudinal_accel":4,
+            "lateral_accel":     5,
+            "vehicle_x":         6,
+            "vehicle_y":         7,
+            "lateral_offset":    8,
+        },
+        "eye": {
+            "blink_frequency":   0,
+            "gaze_x":            1,
+            "gaze_y":            2,
+            "pupil_diameter":    3,
+        },
+        "phy": {
+            "bvp":   0,
+            "ecg":   1,
+            "resp":  2,
+            "hr":    3,
+            "hrv":   4,
+            "scl":   5,
+        },
+    },
+    "20": {
+        "act": {
+            "throttle_pedal":    0,
+            "brake_pedal":       1,
+            "steering_angle":    2,
+            "vehicle_speed":     3,
+            "longitudinal_accel":4,
+            "lateral_accel":     5,
+            "vehicle_x":         6,
+            "vehicle_y":         7,
+            "lateral_offset":    8,
+        },
+        "eye": {
+            "blink_frequency":   0,
+            "gaze_x":            1,
+            "gaze_y":            2,
+        },
+        "phy": {
+            "bvp":   0,
+            "ecg":   1,
+            "resp":  2,
+            "hr":    3,
+            "hrv":   4,
+        },
+    },
+}
+
+
+def detect_data_version(data_path: str) -> str:
+    """根据文件名自动检测数据版本，返回 'standard' 或 '22'"""
+    basename = os.path.basename(data_path)
+    if "22" in basename:
+        version = "22"
+    elif "20" in basename:
+        version = "20"
+    else:
+        version = "standard"
+    print(f"[版本检测] data_path='{basename}' → 使用 '{version}' 列映射")
+    return version
+
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description="驾驶能力波动计算脚本")
@@ -139,64 +235,64 @@ def preprocess_single_sample(act, eye, phy, config):
 
 
 # ====================== 2. 特征提取 ======================
-def extract_features_single_sample(act_win, eye_win, phy_win):
-    """
-    从单样本窗口化数据中提取驾驶特征。
-
-    修改说明（相较于原版）：
-    ① 方向性特征（steering_angle / steering_velocity / lateral_offset /
-       lateral_accel）一律取绝对值。
-       理由：驾驶能力评估关注偏差幅度而非方向；负值会导致特征分布出现
-       双峰或零膨胀，使后续熵权和归一化严重失真。
-    ② brake_pedal 已是非负量（踏板开度），无需处理；原始数据若含负值
-       说明是传感器零点偏移，此处取绝对值以统一量纲。
-    ③ hrv 取绝对值，消除极少数负异常值对归一化的影响。
-    """
+def extract_features_single_sample(act_win, eye_win, phy_win, col_map):
+    """从单样本窗口化数据中提取驾驶特征（列映射由 col_map 驱动）"""
     if act_win is None or len(act_win) == 0:
         return pd.DataFrame()
 
     df = pd.DataFrame()
+    act_map = col_map["act"]
+    eye_map = col_map["eye"]
+    phy_map = col_map["phy"]
 
     # ---------- 操纵行为特征 ----------
-    # ① 取绝对值：转角幅度，消除左右方向性
-    df["steering_angle"] = np.abs(act_win[:, 2])
-    if len(act_win) >= 2:
-        dv = np.diff(df["steering_angle"], prepend=df["steering_angle"].iloc[0])
-        # ① 取绝对值：角速度幅度
-        df["steering_velocity"] = np.abs(dv / 3.0)
-    else:
-        df["steering_velocity"] = 0.0
-    # ② 踏板开度：取绝对值消除传感器零点负偏移
-    df["brake_pedal"] = np.abs(act_win[:, 1])
-    df["throttle_pedal"] = np.abs(act_win[:, 0])
+    df["steering_angle"]    = np.abs(act_win[:, act_map["steering_angle"]])
+    dv = np.diff(df["steering_angle"], prepend=df["steering_angle"].iloc[0])
+    df["steering_velocity"] = np.abs(dv / 3.0)
+    df["brake_pedal"]       = np.abs(act_win[:, act_map["brake_pedal"]])
+    df["throttle_pedal"]    = np.abs(act_win[:, act_map["throttle_pedal"]])
 
     # ---------- 车辆响应特征 ----------
-    df["longitudinal_accel"] = np.abs(act_win[:, 4])  # ① 纵向加速度幅度
-    df["lateral_offset"] = np.abs(act_win[:, 8])  # ① 横向偏移幅度
-    df["lateral_accel"] = np.abs(act_win[:, 5])  # ① 横向加速度幅度
-    df["vehicle_speed"] = act_win[:, 3]  # 车速本身非负，保留
+    df["vehicle_speed"]      = act_win[:, act_map["vehicle_speed"]]
+    df["longitudinal_accel"] = np.abs(act_win[:, act_map["longitudinal_accel"]])
+    df["lateral_accel"]      = np.abs(act_win[:, act_map["lateral_accel"]])
+    df["lateral_offset"]     = np.abs(act_win[:, act_map["lateral_offset"]])
+    # vehicle_x / vehicle_y 仅 22 版本存在
+    for feat in ("vehicle_x", "vehicle_y"):
+        if feat in act_map:
+            df[feat] = act_win[:, act_map[feat]]
 
     # ---------- 眼动认知特征 ----------
-    if eye_win is not None and len(eye_win) > 0 and eye_win.shape[1] >= 3:
-        df["gaze_dispersion"] = np.std(eye_win[:, 1:3], axis=1)
-        df["blink_frequency"] = eye_win[:, 0]
+    min_eye_cols = max(eye_map.values()) + 1 if eye_map else 0
+    if eye_win is not None and len(eye_win) > 0 and eye_win.shape[1] >= min_eye_cols:
+        df["blink_frequency"] = eye_win[:, eye_map["blink_frequency"]]
+        df["blink_std"]       = (pd.Series(eye_win[:, eye_map["blink_frequency"]])
+                                   .rolling(3, min_periods=1).std().fillna(0).values)
+        df["gaze_x"]          = eye_win[:, eye_map["gaze_x"]]
+        df["gaze_y"]          = eye_win[:, eye_map["gaze_y"]]
+        df["gaze_dispersion"] = np.std(
+            eye_win[:, [eye_map["gaze_x"], eye_map["gaze_y"]]], axis=1
+        )
+        if "pupil_diameter" in eye_map:
+            df["pupil_diameter"] = eye_win[:, eye_map["pupil_diameter"]]
     else:
-        df["gaze_dispersion"] = 0.0
-        df["blink_frequency"] = 0.0
+        for feat in ("blink_frequency", "blink_std", "gaze_x",
+                     "gaze_y", "gaze_dispersion", "pupil_diameter"):
+            df[feat] = 0.0
 
     # ---------- 生理状态特征 ----------
-    if phy_win is not None and len(phy_win) > 0 and phy_win.shape[1] >= 5:
-        df["hrv"] = np.abs(phy_win[:, 4])  # ③ 消除极少数负异常值
-        df["hr"] = phy_win[:, 3]
-        df["bvp"] = phy_win[:, 0]
-        df["ecg"] = phy_win[:, 1]
-        df["resp"] = phy_win[:, 2]
+    min_phy_cols = max(phy_map.values()) + 1 if phy_map else 0
+    if phy_win is not None and len(phy_win) > 0 and phy_win.shape[1] >= min_phy_cols:
+        df["bvp"]  = phy_win[:, phy_map["bvp"]]
+        df["ecg"]  = phy_win[:, phy_map["ecg"]]
+        df["resp"] = phy_win[:, phy_map["resp"]]
+        df["hr"]   = phy_win[:, phy_map["hr"]]
+        df["hrv"]  = np.abs(phy_win[:, phy_map["hrv"]])
+        if "scl" in phy_map:
+            df["scl"] = phy_win[:, phy_map["scl"]]
     else:
-        df["hrv"] = 0.0
-        df["hr"] = 0.0
-        df["bvp"] = 0.0
-        df["ecg"] = 0.0
-        df["resp"] = 0.0
+        for feat in ("bvp", "ecg", "resp", "hr", "hrv", "scl"):
+            df[feat] = 0.0
 
     return df.dropna(axis=1)
 
@@ -213,28 +309,38 @@ def correlation_filter(df, threshold=0.8):
 
 
 def vif_filter(df, threshold=10):
-    """方差膨胀因子(VIF)筛选"""
+    """方差膨胀因子(VIF)筛选，完整记录保留/删除特征和VIF值"""
     if df.empty or len(df.columns) < 2:
-        return df, pd.DataFrame({"feature": df.columns, "VIF": []})
+        return df, pd.DataFrame(columns=["feature", "VIF", "processing_result"])
 
     df_vif = df.copy()
-    vif_results = []
+    # 存储所有特征的VIF结果：保留/删除
+    all_vif_records = []
+    
     while True:
-        vif = [
-            variance_inflation_factor(df_vif.values, i) for i in range(df_vif.shape[1])
-        ]
-        max_vif = max(vif)
-        vif_results = vif
+        # 计算当前所有特征的VIF
+        vif_values = [variance_inflation_factor(df_vif.values, i) for i in range(df_vif.shape[1])]
+        max_vif = max(vif_values)
+        max_idx = np.argmax(vif_values)
+        drop_col = df_vif.columns[max_idx]
+
         if max_vif <= threshold:
+            # 剩余特征全部保留
+            for col, vif in zip(df_vif.columns, vif_values):
+                all_vif_records.append({"feature": col, "VIF": vif, "processing_result": "retained"})
             break
-        drop_col = df_vif.columns[np.argmax(vif)]
-        df_vif = df_vif.drop(columns=drop_col)
+        
+        # 记录被删除的特征
+        all_vif_records.append({"feature": drop_col, "VIF": max_vif, "processing_result": "removed"})
+        # 删除该特征
+        df_vif = df_vif.drop(columns=[drop_col])
+        
         if df_vif.empty:
             break
-    vif_df = pd.DataFrame(
-        {"feature": df_vif.columns, "VIF": vif_results[: len(df_vif.columns)]}
-    )
-    return df_vif, vif_df
+
+    # 生成完整VIF结果表
+    vif_full_df = pd.DataFrame(all_vif_records)
+    return df_vif, vif_full_df
 
 
 # ====================== 4. 权重计算 ======================
@@ -349,19 +455,6 @@ def calculate_fluctuation(df, weights, target_std=0.025):
     return A_fl, S_fl
 
 
-# ====================== 6. 数据保存 ======================
-def save_vif_result(vif_result, outdir):
-    """Save VIF test results"""
-    vif_df = vif_result.copy()
-    vif_df["processing_result"] = np.where(vif_df["VIF"] >= 10, "removed", "retained")
-    vif_df = vif_df.sort_values("processing_result", ascending=False)
-    vif_df.to_csv(
-        os.path.join(outdir, "Afl_feature_vif_test.csv"),
-        index=False,
-        encoding="utf-8-sig",
-    )
-
-
 def save_feature_weights(ahp_w, ent_w, combined_w, outdir):
     """Save combined feature weights"""
     existing_features = sorted(
@@ -388,24 +481,44 @@ def save_feature_weights(ahp_w, ent_w, combined_w, outdir):
     print(f"实际有效特征权重已保存：共 {len(weight_data)} 个特征 → {save_path}")
 
 
-def save_correlation_dropped(dropped_corr, features_df, outdir):
-    """Save features dropped by correlation analysis"""
-    paper_dropped = ["vehicle_speed", "follow_distance", "throttle_pedal"]
-    dropped_filtered = [f for f in dropped_corr if f in paper_dropped]
-    dropped_df = pd.DataFrame(
-        {
-            "dropped_feature": dropped_filtered,
-            "drop_reason": "Pearson correlation coefficient > 0.8",
-        }
-    )
+def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, outdir):
+    """
+    合并保存【相关性】和【VIF】筛选删除的所有特征
+    输出文件：Afl_dropped_features.csv
+    """
+    # 1. 构建所有删除特征的列表+原因
+    dropped_data = []
+    # 相关性删除的特征
+    for feat in dropped_corr:
+        dropped_data.append({
+            "dropped_feature": feat,
+            "drop_reason": "Pearson correlation coefficient > 0.8"
+        })
+    # VIF删除的特征
+    for feat in dropped_vif:
+        dropped_data.append({
+            "dropped_feature": feat,
+            "drop_reason": "VIF value exceeds threshold (severe multicollinearity)"
+        })
+    
+    # 2. 保存为统一的CSV文件
+    dropped_df = pd.DataFrame(dropped_data)
     dropped_df.to_csv(
-        os.path.join(outdir, "Afl_dropped_features_correlation.csv"),
-        index=False,
-        encoding="utf-8-sig",
+        os.path.join(outdir, "Afl_dropped_features.csv"),  # 统一文件名
+        index=False, encoding="utf-8-sig"
     )
-    corr_matrix = features_df.corr()
-    corr_matrix.to_csv(
+    
+    # 3. 保留原有的相关系数矩阵输出（论文需要）
+    features_df.corr().to_csv(
         os.path.join(outdir, "Afl_feature_correlation_matrix.csv"),
+        encoding="utf-8-sig"
+    )
+
+    # 4. Save完整VIF检验结果（包含删除+保留的特征）
+    vif_df = vif_result.sort_values(["processing_result", "VIF"], ascending=[False, False])
+    vif_df.to_csv(
+        os.path.join(outdir, "Afl_feature_vif_test.csv"),
+        index=False,
         encoding="utf-8-sig",
     )
 
@@ -499,6 +612,10 @@ def main():
     os.makedirs(res_dir, exist_ok=True)
     os.makedirs(fig_dir, exist_ok=True)
 
+    # 版本检测
+    data_version = detect_data_version(config["data_path"])
+    col_map = COLUMN_MAPS[data_version]
+
     # 1. 加载数据
     act_raw, eye_raw, phy_raw = load_data(data_path)
     print("=== 数据加载完成 ===")
@@ -521,7 +638,9 @@ def main():
         field_vals = act_win[:, -1].astype(int)
         field_vals = np.clip(field_vals, 0, 3)
         sample_field_list.append(field_vals)
-        sample_feat = extract_features_single_sample(act_win, eye_win, phy_win)
+        sample_feat = extract_features_single_sample(
+            act_win, eye_win, phy_win, col_map
+        )
         if not sample_feat.empty:
             sample_feat["sample_id"] = i
             all_features.append(sample_feat)
@@ -548,8 +667,11 @@ def main():
     features_final, vif_result = vif_filter(
         features_corr, threshold=config["vif_threshold"]
     )
+    dropped_vif = [f for f in features_corr.columns if f not in features_final.columns]
+
     print(f"\n=== 特征筛选完成 ===")
     print(f"相关性筛选删除特征: {dropped_corr}")
+    print(f"VIF筛选删除特征: {dropped_vif}")  # 新增打印
     print(f"最终保留特征: {list(features_final.columns)}")
 
     if features_final.empty:
@@ -605,8 +727,7 @@ def main():
     print(f"\nPKL结果已保存至:   {output_path}")
 
     # 8. 保存论文 CSV
-    save_correlation_dropped(dropped_corr, features_df, res_dir)
-    save_vif_result(vif_result, res_dir)
+    save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, res_dir)
     save_feature_weights(ahp_w, ent_w, combined_w, res_dir)
     save_fluctuation_stats(A_fl, res_dir, config)
     save_fluctuation_by_group(A_fl, None, res_dir, config)
@@ -615,6 +736,7 @@ def main():
     # 9. 可视化
     run_all_visualizations(
         result_pkl_path=output_path,
+        features_df_before_filter=features_df,
         output_dir=config["visualization_output_dir"],
         config=config,
     )
