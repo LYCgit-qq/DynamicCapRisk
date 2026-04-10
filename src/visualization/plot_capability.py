@@ -278,7 +278,7 @@ def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
     ax.axvline(mean_v, color=SECONDARY_COLOR, linestyle="--", linewidth=1.8,
                label=f"均值 {mean_v:.4f}")
     ax.axvspan(mean_v - std_v, mean_v + std_v, color=LIGHT_FILL, alpha=0.45,  # 修复：LIGHT_FILL
-               label=f"±1σ  [{mean_v - std_v:.4f}, {mean_v + std_v:.4f}]")
+               label=f"±1σ [{mean_v - std_v:.4f}, {mean_v + std_v:.4f}]")
 
     # Shapiro-Wilk 正态性检验
     if len(abc_arr) >= 3:
@@ -290,9 +290,9 @@ def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
                 bbox=dict(facecolor="white", edgecolor="#CCCCCC",
                           alpha=0.85, boxstyle="round,pad=0.4"))
 
-    ax.set_xlabel("个体化基准能力值 $A_{bc}$")
+    ax.set_xlabel("个体化基准能力值 Abc")
     ax.set_ylabel("频次")
-    ax.set_title("个体化基准驾驶能力值 $A_{bc}$ 分布")
+    ax.set_title("个体化基准驾驶能力值 Abc 分布")
     ax.legend(framealpha=0.9, fontsize=10)
     sns.despine(ax=ax)
     path1 = output_dir / "Abc_dist_histogram.png"
@@ -322,8 +322,8 @@ def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
                        s=80, zorder=5, linewidths=0)
 
         ax.set_xlabel("")
-        ax.set_ylabel("个体化基准能力值 $A_{bc}$")
-        ax.set_title("不同能力等级的 $A_{bc}$ 分布（小提琴图）")
+        ax.set_ylabel("个体化基准能力值 Abc")
+        ax.set_title("不同能力等级的 Abc 分布（小提琴图）")
         ax.tick_params(axis="x", labelsize=13)
         ax.grid(axis="y", alpha=0.3, linestyle="--")
         sns.despine(ax=ax)
@@ -343,8 +343,8 @@ def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
     ax.axhline(mean_v, color=SECONDARY_COLOR, linestyle="--",
                linewidth=1.4, label=f"总均值 {mean_v:.4f}")
     ax.set_xlabel(f"{'被试' if id_col == '被试ID' else '实验'} ID")
-    ax.set_ylabel("个体化基准能力值 $A_{bc}$")
-    ax.set_title("各被试个体化基准驾驶能力值 $A_{bc}$")
+    ax.set_ylabel("个体化基准能力值 Abc")
+    ax.set_title("各被试个体化基准驾驶能力值 Abc")
     ax.legend(framealpha=0.9, fontsize=10)
     ax.grid(alpha=0.3, linestyle="--")
     sns.despine(ax=ax)
@@ -395,7 +395,7 @@ def plot_cluster_metrics(eval_df: pd.DataFrame, output_dir: Path, best_k: int = 
     logging.info("聚类评价指标图已保存至: %s", save_path)
 
 
-# ====================== 波动量计算模块 ======================
+# ====================== 波动量计算函数 ======================
 def plot_correlation_heatmap(features_df, save_path, title):
     """
     通用 Pearson 相关性热力图绘制（自适应筛选前/后）
@@ -466,6 +466,7 @@ def plot_correlation_heatmap(features_df, save_path, title):
 def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
     """
     驾驶能力波动量分布图：直方图 + KDE + 统计标注（统一风格）
+    已移除：目标区间 [-0.05, 0.05] 绘制
     """
     if len(fluctuation_arr) == 0:
         print("波动量数组为空，跳过分布图绘制")
@@ -485,35 +486,28 @@ def plot_fluctuation_distribution(fluctuation_arr, save_path=None):
         line_kws={"linewidth": LINE_WIDTH, "color": PRIMARY_COLOR},
     )
 
-    # ±1σ 区间
+    # ±1σ 区间（保留）
     ax.axvspan(mean_val - std_val, mean_val + std_val,
                color=LIGHT_FILL, alpha=0.5,
                label=f"±1σ  [{mean_val - std_val:.3f}, {mean_val + std_val:.3f}]")
 
-    # 论文目标区间 [-0.05, 0.05]
-    paper_min, paper_max = -0.05, 0.05
-    in_ratio = np.mean((fluctuation_arr >= paper_min) & (fluctuation_arr <= paper_max))
-    ax.axvspan(paper_min, paper_max, color=GRAY_FILL, alpha=0.5,
-               label=f"目标区间 [{paper_min}, {paper_max}]（占比 {in_ratio:.1%}）")
-
-    # 均值竖线
+    # 均值竖线（保留）
     ax.axvline(mean_val, color=SECONDARY_COLOR, linestyle="--",
                linewidth=LINE_WIDTH, label=f"均值 {mean_val:.4f}")
 
     # 文字统计框
     stats_text = (
         f"均值: {mean_val:.4f}\n"
-        f"标准差: {std_val:.4f}\n"
-        f"目标区间占比: {in_ratio:.1%}"
+        f"标准差: {std_val:.4f}"
     )
     ax.text(0.97, 0.95, stats_text, transform=ax.transAxes,
-            ha="right", va="top", fontsize=10,
+            ha="right", va="top", fontsize=14,
             bbox=dict(facecolor="white", edgecolor="#CCCCCC", alpha=0.85, boxstyle="round,pad=0.4"))
 
-    ax.set_xlabel("驾驶能力波动量 $A_{fl}$")
-    ax.set_ylabel("频次")
-    ax.set_title("驾驶能力波动量分布")
-    ax.legend(loc="upper left", framealpha=0.9, fontsize=10)
+    ax.set_xlabel("驾驶能力波动量 Afl", fontsize=16)
+    ax.set_ylabel("频次", fontsize=16)
+    ax.tick_params(axis='both', labelsize=14)
+    ax.legend(loc="upper left", framealpha=0.9, fontsize=14)
     _apply_spine(ax)
 
     _save_and_close(fig, save_path, "波动量分布图")
@@ -566,14 +560,23 @@ def plot_grouped_boxplot(fluctuation_sample, config, save_path=None):
         print("无有效波动量数据可绘制")
         return
 
+    # 打印分组样本量（原有）
     print("最终有效分组数据量：")
     for grade, vals in grade_flucts.items():
         print(f"  {grade}: {len(vals)} 个值")
-
+    
+    # ===================== 打印论文所需的 均值+标准差 =====================
     ordered_grades = [g for g in ["高能力组", "中能力组", "低能力组"] if g in grade_flucts]
+    print("\n===== 不同基准能力组波动量统计结果（论文用） =====")
+    for grade in ordered_grades:
+        vals = grade_flucts[grade]
+        mean_val = np.mean(vals)
+        std_val = np.std(vals)
+        print(f"  {grade}: 均值 = {mean_val:.4f}, 标准差 = {std_val:.4f}")
+    # ==========================================================================
 
     # 构建绘图 DataFrame
-    rows = [{"驾驶能力波动量 $A_{fl}$": v, "真实能力等级": g}
+    rows = [{"驾驶能力波动量 Afl": v, "真实能力等级": g}
             for g, vals in grade_flucts.items() for v in vals]
     plot_df = pd.DataFrame(rows)
     plot_df["真实能力等级"] = pd.Categorical(
@@ -585,39 +588,45 @@ def plot_grouped_boxplot(fluctuation_sample, config, save_path=None):
     fig, ax = plt.subplots(figsize=FIGURE_SIZE_WIDE)
 
     sns.boxplot(
-        x="真实能力等级", y="驾驶能力波动量 $A_{fl}$",
+        x="真实能力等级", y="驾驶能力波动量 Afl",
         hue="真实能力等级", data=plot_df,
         palette=palette, showfliers=False, width=0.55,
         linewidth=1.2, ax=ax, legend=False,
     )
 
-    # ANOVA 标注
+    # ANOVA 标注 + 新增打印方差分析结果
+    f_stat, p_val = None, None
     if len(ordered_grades) >= 2:
-        try:
-            f_stat, p_val = stats.f_oneway(*[grade_flucts[g] for g in ordered_grades])
-            p_text = (f"ANOVA: F = {f_stat:.2f}, p < 0.001" if p_val < 0.001
-                      else f"ANOVA: F = {f_stat:.2f}, p = {p_val:.3f}")
-            ax.text(0.5, 0.97, p_text, transform=ax.transAxes,
-                    ha="center", va="top", fontsize=10,
-                    bbox=dict(facecolor="white", edgecolor="#CCCCCC", alpha=0.85, boxstyle="round,pad=0.4"))
-        except Exception as e:
-            print(f"ANOVA 计算失败: {e}")
+        f_stat, p_val = stats.f_oneway(*[grade_flucts[g] for g in ordered_grades])
+        # p_text = (f"ANOVA: F = {f_stat:.2f}, p < 0.001" if p_val < 0.001
+        #             else f"ANOVA: F = {f_stat:.2f}, p = {p_val:.3f}")
+        # ax.text(0.5, 0.97, p_text, transform=ax.transAxes,
+        #         ha="center", va="top", fontsize=14,
+        #         bbox=dict(facecolor="white", edgecolor="#CCCCCC", alpha=0.85, boxstyle="round,pad=0.4"))
+    
+    # ===================== 打印 ANOVA 结果（论文用） =====================
+    if f_stat is not None and p_val is not None:
+        print("\n===== 单因素方差分析结果（论文用） =====")
+        print(f"  F值 = {f_stat:.2f}, p值 = {p_val:.3e}")
+        if p_val < 0.001:
+            print("  结论：三组间差异极显著（p < 0.001）")
+    # ==========================================================================
 
-    # 均值三角标注
+    # 均值三角标注（温和红色）
     for i, grade in enumerate(ordered_grades):
         mean_v = np.mean(grade_flucts[grade])
-        ax.scatter(i, mean_v, color=SECONDARY_COLOR, marker="^",
+        ax.scatter(i, mean_v, color="indianred", marker="^",
                    s=60, zorder=10, linewidths=0)
 
     ax.set_xlabel("")
-    ax.set_ylabel("驾驶能力波动量 $A_{fl}$")
-    ax.set_title("不同真实能力等级的驾驶能力波动量")
-    ax.tick_params(axis="x", labelsize=13)
+    ax.set_ylabel("驾驶能力波动量 Afl", fontsize=16)
+    ax.tick_params(axis="x", labelsize=16)
+    ax.tick_params(axis="y", labelsize=14)
     ax.grid(axis="y", alpha=GRID_ALPHA, linestyle="--")
     _apply_spine(ax)
 
     _save_and_close(fig, save_path, "箱线图")
-
+    
 
 def plot_grouped_boxplot_abs(fluctuation_arr, n_groups=3, save_path=None):
     """
@@ -682,7 +691,7 @@ def plot_grouped_boxplot_abs(fluctuation_arr, n_groups=3, save_path=None):
         print(f"均值标注失败: {e}")
 
     ax.set_xlabel("")
-    ax.set_ylabel("驾驶能力波动量 $A_{fl}$")
+    ax.set_ylabel("驾驶能力波动量 Afl")
     ax.set_title("不同基准能力组的驾驶能力波动量")
     ax.tick_params(axis="x", labelsize=13)
     ax.grid(axis="y", alpha=GRID_ALPHA, linestyle="--")
@@ -691,8 +700,7 @@ def plot_grouped_boxplot_abs(fluctuation_arr, n_groups=3, save_path=None):
     _save_and_close(fig, save_path, "分组箱线图")
 
 
-# ====================== 主调用函数 ======================
-
+# ====================== 驾驶能力波动量主函数 ======================
 def run_all_visualizations(
     result_pkl_path,
     features_df_before_filter,
@@ -725,14 +733,14 @@ def run_all_visualizations(
 
     # ====================== 绘制两张相关性热力图 ======================
     # 1. 筛选前 → 全部原始特征
-    heatmap_before_path = os.path.join(output_dir, "correlation_heatmap_before_filter.png")
+    heatmap_before_path = os.path.join(output_dir, "Afl_corr_heatmap_before_filter.png")
     plot_correlation_heatmap(
         features_df_before_filter,  # 筛选前全部特征
         save_path=heatmap_before_path,
         title="驾驶特征 Pearson 相关性热力图（筛选前）"
     )
     # 2. 筛选后 → 最终保留特征
-    heatmap_after_path = os.path.join(output_dir, "correlation_heatmap_after_filter.png")
+    heatmap_after_path = os.path.join(output_dir, "Afl_corr_heatmap_after_filter.png")
     plot_correlation_heatmap(
         result["features"],  # 筛选后最终特征
         save_path=heatmap_after_path,
@@ -748,7 +756,6 @@ def run_all_visualizations(
 
 
 # ====================== 动态驾驶能力模块 ======================
-
 def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, config):
     """
     动态驾驶能力可视化：
@@ -763,6 +770,7 @@ def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, conf
     out_dir     = full_paths["output_dir"]
 
     ad_mean = np.mean(all_dynamic_cap)
+    ad_std = np.std(all_dynamic_cap)
 
     # ---- 图1：全局分布 ----
     fig, ax = plt.subplots(figsize=FIGURE_SIZE_WIDE)
@@ -770,14 +778,21 @@ def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, conf
                  color=PRIMARY_COLOR, edgecolor="white", linewidth=0.4,
                  alpha=0.75, ax=ax,
                  line_kws={"linewidth": LINE_WIDTH, "color": PRIMARY_COLOR})
+    
+    # ±1σ 阴影区间（新增）
+    ax.axvspan(ad_mean - ad_std, ad_mean + ad_std,
+               color=LIGHT_FILL, alpha=0.5,
+               label=f"±1σ [{ad_mean - ad_std:.3f}, {ad_mean + ad_std:.3f}]")
+               
+    # 均值竖线（保留）
     ax.axvline(ad_mean, color=SECONDARY_COLOR, linestyle="--",
                linewidth=LINE_WIDTH, label=f"均值 = {ad_mean:.2f}")
-    for thresh in [0.55, 0.90]:
-        ax.axvline(thresh, color=ACCENT_COLOR, linestyle=":",
-                   linewidth=1.2, label=f"阈值 {thresh}")
-    ax.set_xlabel("动态驾驶能力量化值 $A_d$")
+    # for thresh in [0.25, 0.75]:
+    #     ax.axvline(thresh, color=ACCENT_COLOR, linestyle=":",
+    #                linewidth=1.2, label=f"阈值 {thresh}")
+    ax.set_xlabel("动态驾驶能力量化值 Ad")
     ax.set_ylabel("频次")
-    ax.set_title("动态驾驶能力量化值整体分布")
+    # ax.set_title("动态驾驶能力量化值整体分布")
     ax.legend(framealpha=0.9)
     ax.grid(axis="y", alpha=GRID_ALPHA, linestyle="--")
     _apply_spine(ax)
@@ -812,8 +827,8 @@ def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, conf
                        label=group, s=75, alpha=0.85, edgecolors="white", linewidths=0.4)
 
     ax.set_xlabel("驾驶人编号（被试 ID）")
-    ax.set_ylabel("动态驾驶能力均值 $A_d$")
-    ax.set_title("32 名驾驶人动态驾驶能力均值分布")
+    ax.set_ylabel("动态驾驶能力均值 Ad")
+    # ax.set_title("32 名驾驶人动态驾驶能力均值分布")
     ax.legend(title="基准能力等级", framealpha=0.9)
     ax.grid(alpha=GRID_ALPHA, linestyle="--")
     ax.set_xticks(range(1, 33))

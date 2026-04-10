@@ -1,0 +1,87 @@
+# 驾驶特征列索引映射配置文件 - 外部可编辑
+# standard:原始数据 | "22":22维 | "20":20维 | "17":17维(删除X/Y、ECG)
+standard:
+  act:
+    throttle_pedal: 0
+    brake_pedal: 1
+    steering_angle: 2
+    vehicle_speed: 3
+    longitudinal_accel: 4
+    lateral_accel: 5
+    lateral_offset: 8
+  eye:
+    blink_frequency: 0
+    gaze_x: 1
+    gaze_y: 2
+  phy:
+    bvp: 0
+    ecg: 1
+    resp: 2
+    hr: 3
+    hrv: 4
+
+"22":
+  act:
+    throttle_pedal: 0
+    brake_pedal: 1
+    steering_angle: 2
+    vehicle_speed: 3
+    longitudinal_accel: 4
+    lateral_accel: 5
+    vehicle_x: 6
+    vehicle_y: 7
+    lateral_offset: 8
+  eye:
+    blink_frequency: 0
+    gaze_x: 1
+    gaze_y: 2
+    pupil_diameter: 3
+  phy:
+    bvp: 0
+    ecg: 1
+    resp: 2
+    hr: 3
+    hrv: 4
+    scl: 5
+
+"20":
+  act:
+    throttle_pedal: 0
+    brake_pedal: 1
+    steering_angle: 2
+    vehicle_speed: 3
+    longitudinal_accel: 4
+    lateral_accel: 5
+    vehicle_x: 6
+    vehicle_y: 7
+    lateral_offset: 8
+  eye:
+    blink_frequency: 0
+    gaze_x: 1
+    gaze_y: 2
+  phy:
+    bvp: 0
+    ecg: 1
+    resp: 2
+    hr: 3
+    hrv: 4
+
+"17":
+  act:
+    steering_angle: 0
+    steering_velocity: 1
+    throttle_pedal: 2
+    brake_pedal: 3
+    vehicle_speed: 4
+    longitudinal_accel: 5
+    lateral_accel: 6
+    lateral_offset: 7
+  eye:
+    blink_frequency: 2
+    gaze_x: 0
+    gaze_y: 1
+  phy:
+    hr: 0
+    hrv: 1
+    bvp: 2
+    resp: 3

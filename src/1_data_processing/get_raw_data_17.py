@@ -1,8 +1,6 @@
 import pickle
 import numpy as np
 import os
-# 🔥 修复：正确的导入路径（scipy.ndimage）
-from scipy.ndimage import gaussian_filter1d
 
 def resample_signal(signal, original_rate, target_rate, target_length=None):
     """重采样信号到目标频率（线性插值）"""
@@ -41,22 +39,22 @@ def calculate_gaze_dispersion(gaze_xy, sample_rate=60, window_sec=10):
 # ====================== 路径配置 ======================
 INPUT_PKL = "data/processed/raw_data.pkl"
 OUTPUT_DIR = "data/processed"
-OUTPUT_PKL = os.path.join(OUTPUT_DIR, "raw_data_20.pkl")
+OUTPUT_PKL = os.path.join(OUTPUT_DIR, "raw_data_17.pkl")  # 重命名为17维
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ====================== 1. 加载原始数据 ======================
 print("正在加载原始数据...")
 with open(INPUT_PKL, "rb") as f:
     raw_data = pickle.load(f)
-act_list = raw_data["act"]  # 67个样本，每个(T, 10)
-eye_list = raw_data["eye"]  # 67个样本，每个(T, 3)
-phy_list = raw_data["phy"]  # 67个样本，每个(T, 5)
+act_list = raw_data["act"]
+eye_list = raw_data["eye"]
+phy_list = raw_data["phy"]
 
-# ====================== 2. 逐样本生成新的 act/eye/phy ======================
-print("正在生成20维特征并按模态拆分...")
-new_act_list = []  # 67个样本，每个(T, 10) - 操纵行为+车辆响应
-new_eye_list = []  # 67个样本，每个(T, 5)  - 眼动认知
-new_phy_list = []  # 67个样本，每个(T, 5)  - 生理状态
+# ====================== 2. 逐样本生成新的 17维特征 ======================
+print("正在生成17维特征并按模态拆分...")
+new_act_list = []  # 8维  （删除X/Y坐标）
+new_eye_list = []  # 5维  （不变）
+new_phy_list = []  # 4维  （删除ECG）
 
 for i in range(len(act_list)):
     act = act_list[i]
@@ -64,14 +62,12 @@ for i in range(len(act_list)):
     phy = phy_list[i]
     T_act = act.shape[0]
     
-    # 2.1 重采样对齐
+    # 重采样对齐
     eye_60 = resample_signal(eye, 120, 60, T_act)
     phy_60 = resample_signal(phy, 100, 60, T_act)
     
-    # ====================== 2.2 构建新的 act (10维) ======================
-    # 对应表3.6前10个特征
-    new_act = np.zeros((T_act, 10))
-    
+    # ====================== 构建新的 act (8维) ======================
+    new_act = np.zeros((T_act, 8))  # 10维 → 8维
     # [0] 方向盘转角
     new_act[:, 0] = np.abs(act[:, 2])
     # [1] 方向盘转角角速度
@@ -90,45 +86,23 @@ for i in range(len(act_list)):
     new_act[:, 6] = np.abs(act[:, 5])
     # [7] 相对理想路径偏移量
     new_act[:, 7] = np.abs(act[:, 8])
-    # [8] 车辆X坐标
-    new_act[:, 8] = act[:, 6]
-    # [9] 车辆Y坐标
-    new_act[:, 9] = act[:, 7]
+    # 已删除：车辆X坐标、车辆Y坐标
     
-    # ====================== 2.3 构建新的 eye (5维) ======================
-    # 对应表3.6中间5个特征
+    # ====================== 构建新的 eye (5维) ======================
     new_eye = np.zeros((T_act, 5))
+    new_eye[:, 0] = eye_60[:, 1]      # 注视X
+    new_eye[:, 1] = eye_60[:, 2]      # 注视Y
+    new_eye[:, 2] = eye_60[:, 0]      # 眨眼频率
+    new_eye[:, 3] = eye_60[:, 0]      # 眨眼标准差
+    new_eye[:, 4] = calculate_gaze_dispersion(eye_60[:, 1:3])  # 分散度
     
-    # [0] 注视点X坐标
-    new_eye[:, 0] = eye_60[:, 1]
-    # [1] 注视点Y坐标
-    new_eye[:, 1] = eye_60[:, 2]
-    # [2] 眨眼频率（用眨眼标准差近似）
-    new_eye[:, 2] = eye_60[:, 0]
-    # [3] 眨眼标准差
-    new_eye[:, 3] = eye_60[:, 0]
-    # [4] 注视点分散度
-    new_eye[:, 4] = calculate_gaze_dispersion(eye_60[:, 1:3])
-    
-    # ====================== 2.4 构建新的 phy (5维) ======================
-    # 对应表3.6最后5个特征
-    new_phy = np.zeros((T_act, 5))
-    
-    # [0] 心率均值
-    new_phy[:, 0] = phy_60[:, 3]
-    # [1] 心率变异性
-    new_phy[:, 1] = np.abs(phy_60[:, 4])
-    # [2] 血容量脉搏
-    new_phy[:, 2] = phy_60[:, 0]
-    
-    # ECG超强力平滑处理（逻辑完全不变）
-    ecg_original = phy_60[:, 1]
-    ecg_strong_smoothed = gaussian_filter1d(ecg_original, sigma=20)
-    # [3] 心电信号（平滑后）
-    new_phy[:, 3] = ecg_strong_smoothed
-    
-    # [4] 呼吸信号
-    new_phy[:, 4] = phy_60[:, 2]
+    # ====================== 构建新的 phy (4维) ======================
+    new_phy = np.zeros((T_act, 4))  # 5维 → 4维
+    new_phy[:, 0] = phy_60[:, 3]    # 心率均值
+    new_phy[:, 1] = np.abs(phy_60[:, 4])  # 心率变异性
+    new_phy[:, 2] = phy_60[:, 0]    # 血容量脉搏
+    new_phy[:, 3] = phy_60[:, 2]    # 呼吸信号
+    # 已删除：心电信号ECG
     
     # 加入列表
     new_act_list.append(new_act)
@@ -136,11 +110,11 @@ for i in range(len(act_list)):
     new_phy_list.append(new_phy)
     print(f"  样本 {i+1}/67 处理完成")
 
-# ====================== 3. 保存（严格对齐原始结构） ======================
+# ====================== 3. 保存 ======================
 output_data = {
-    "act": new_act_list,  # 67个样本，每个(T, 10)
-    "eye": new_eye_list,  # 67个样本，每个(T, 5)
-    "phy": new_phy_list   # 67个样本，每个(T, 5)
+    "act": new_act_list,
+    "eye": new_eye_list,
+    "phy": new_phy_list
 }
 
 with open(OUTPUT_PKL, "wb") as f:
@@ -148,15 +122,15 @@ with open(OUTPUT_PKL, "wb") as f:
 
 # ====================== 4. 输出验证信息 ======================
 print("\n" + "="*60)
-print("✅ 20维特征扩展 + ECG强力平滑完成！")
+print("✅ 17维特征处理完成！(已删除X/Y坐标、ECG)")
 print(f"📦 输出文件: {OUTPUT_PKL}")
-print(f"🔢 数据结构: {{'act': list, 'eye': list, 'phy': list}}")
+print(f"🔢 总维度：17维 (act8 + eye5 + phy4)")
 print(f"📊 维度详情:")
 print(f"   - act: {len(new_act_list)} 个样本，单样本维度 {new_act_list[0].shape}")
 print(f"   - eye: {len(new_eye_list)} 个样本，单样本维度 {new_eye_list[0].shape}")
 print(f"   - phy: {len(new_phy_list)} 个样本，单样本维度 {new_phy_list[0].shape}")
-print("\n📋 模态内特征索引表：")
-print(" 【act 10维】: 0-方向盘转角, 1-角速度, 2-油门, 3-刹车, 4-车速, 5-纵向加, 6-横向加, 7-偏移量, 8-X, 9-Y")
-print(" 【eye  5维】: 0-注视X, 1-注视Y, 2-眨眼频率, 3-眨眼标准差, 4-分散度")
-print(" 【phy  5维】: 0-心率均值, 1-HRV, 2-BVP, 3-ECG(已强力平滑), 4-RESP")
+print("\n📋 最终17维特征索引表：")
+print(" 【act 8维】: 0-方向盘转角,1-角速度,2-油门,3-刹车,4-车速,5-纵向加,6-横向加,7-偏移量")
+print(" 【eye 5维】: 0-注视X,1-注视Y,2-眨眼频率,3-眨眼标准差,4-分散度")
+print(" 【phy 4维】: 0-心率均值,1-HRV,2-BVP,3-呼吸信号")
 print("="*60)

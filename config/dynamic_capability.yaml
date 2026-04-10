@@ -15,16 +15,23 @@ calculation:
   # ── 基准能力模式 ──────────────────────────────────────────────────
   # Ab  : 聚类中心均值（高/中/低三值），计算快，组内无差异
   # Abc : 个体化基准能力（32名被试各一值），需先运行 baseline_capability.py
-  ab_mode: "Ab"
+  # ab_mode: "Ab"
+  ab_mode: "Abc"
 
   # ── Ad 输出区间（正态化后线性缩放到该范围） ───────────────────────
   # 建议保持 [0.50, 1.00] 与论文一致；如需收窄可改为 [0.55, 0.95]
-  ad_output_min: 0.50
+  ad_output_min: 0.00
   ad_output_max: 1.00
 
   # ── A_fl 原始值转换参数（仅当 pkl 中存的是 S_fl 时生效） ──────────
   afl_coeff:  0.4
   afl_const: -0.2
+  
+  # 权重模式选择："fixed" (固定权重) 或 "objective" (CRITIC+熵权客观权重)
+  weight_mode: "objective" 
+  ad_weights:
+    ab_weight: 0.3
+    afl_weight: 0.7
 
 plot:
   font_size:        10

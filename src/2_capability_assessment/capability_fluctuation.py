@@ -1,5 +1,3 @@
-# D:\Local\DynamicCapRisk\src\2_capability_assessment\capability_fluctuation.py
-
 import os
 import yaml
 import argparse
@@ -12,6 +10,21 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.preprocessing import StandardScaler
 from src.visualization.plot_capability import run_all_visualizations
 from src.utils.ahp_calculator import calculate_ahp_weights
+
+
+# ====================== 列映射配置加载（外部YAML） ======================
+def load_column_maps(config_path="D:\Local\DynamicCapRisk\config\column_maps.yaml"):
+    """从外部YAML加载列索引映射配置"""
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            column_maps = yaml.safe_load(f)
+        print(f"✅ 成功加载外部列映射配置：{config_path}")
+        return column_maps
+    except Exception as e:
+        raise FileNotFoundError(f"❌ 列映射配置文件加载失败：{e}")
+
+# 全局加载列映射（外部配置，无硬编码）
+COLUMN_MAPS = load_column_maps()
 
 
 # ====================== 配置加载 ======================
@@ -31,100 +44,20 @@ def load_config(config_path=None):
 
 
 # ====================== 版本检测 ======================
-# 两套数据的列索引映射
-COLUMN_MAPS = {
-    "standard": {
-        "act": {
-            "throttle_pedal":    0,
-            "brake_pedal":       1,
-            "steering_angle":    2,
-            "vehicle_speed":     3,
-            "longitudinal_accel":4,
-            "lateral_accel":     5,
-            "lateral_offset":    8,
-            # vehicle_x / vehicle_y 不存在，留空
-        },
-        "eye": {
-            "blink_frequency":   0,
-            "gaze_x":            1,
-            "gaze_y":            2,
-            # pupil_diameter 不存在
-        },
-        "phy": {
-            "bvp":   0,
-            "ecg":   1,
-            "resp":  2,
-            "hr":    3,
-            "hrv":   4,
-            # scl 不存在
-        },
-    },
-    "22": {
-        "act": {
-            "throttle_pedal":    0,
-            "brake_pedal":       1,
-            "steering_angle":    2,
-            "vehicle_speed":     3,
-            "longitudinal_accel":4,
-            "lateral_accel":     5,
-            "vehicle_x":         6,
-            "vehicle_y":         7,
-            "lateral_offset":    8,
-        },
-        "eye": {
-            "blink_frequency":   0,
-            "gaze_x":            1,
-            "gaze_y":            2,
-            "pupil_diameter":    3,
-        },
-        "phy": {
-            "bvp":   0,
-            "ecg":   1,
-            "resp":  2,
-            "hr":    3,
-            "hrv":   4,
-            "scl":   5,
-        },
-    },
-    "20": {
-        "act": {
-            "throttle_pedal":    0,
-            "brake_pedal":       1,
-            "steering_angle":    2,
-            "vehicle_speed":     3,
-            "longitudinal_accel":4,
-            "lateral_accel":     5,
-            "vehicle_x":         6,
-            "vehicle_y":         7,
-            "lateral_offset":    8,
-        },
-        "eye": {
-            "blink_frequency":   0,
-            "gaze_x":            1,
-            "gaze_y":            2,
-        },
-        "phy": {
-            "bvp":   0,
-            "ecg":   1,
-            "resp":  2,
-            "hr":    3,
-            "hrv":   4,
-        },
-    },
-}
-
-
 def detect_data_version(data_path: str) -> str:
-    """根据文件名自动检测数据版本，返回 'standard' 或 '22'"""
+    """根据文件名自动检测数据版本，返回 standard/22/20/17"""
     basename = os.path.basename(data_path)
     if "22" in basename:
         version = "22"
     elif "20" in basename:
         version = "20"
+    elif "17" in basename:
+        version = "17"
     else:
         version = "standard"
     print(f"[版本检测] data_path='{basename}' → 使用 '{version}' 列映射")
     return version
+
 
 def parse_args():
     """解析命令行参数"""
@@ -136,6 +69,9 @@ def parse_args():
     parser.add_argument("--vif_thresh", type=float, help="VIF筛选阈值")
     parser.add_argument("--window_sec", type=int, help="滑动窗口秒数")
     parser.add_argument("--fluct_k", type=float, help="波动量计算k值")
+    parser.add_argument("--weight_method", type=str, 
+                        choices=["ahp_entropy", "critic_entropy"],
+                        help="组合赋权方法: ahp_entropy(AHP+熵权) / critic_entropy(CRITIC+熵权)")
     return parser.parse_args()
 
 
@@ -257,7 +193,7 @@ def extract_features_single_sample(act_win, eye_win, phy_win, col_map):
     df["longitudinal_accel"] = np.abs(act_win[:, act_map["longitudinal_accel"]])
     df["lateral_accel"]      = np.abs(act_win[:, act_map["lateral_accel"]])
     df["lateral_offset"]     = np.abs(act_win[:, act_map["lateral_offset"]])
-    # vehicle_x / vehicle_y 仅 22 版本存在
+    # vehicle_x / vehicle_y 仅 22/20 版本存在
     for feat in ("vehicle_x", "vehicle_y"):
         if feat in act_map:
             df[feat] = act_win[:, act_map[feat]]
@@ -284,7 +220,9 @@ def extract_features_single_sample(act_win, eye_win, phy_win, col_map):
     min_phy_cols = max(phy_map.values()) + 1 if phy_map else 0
     if phy_win is not None and len(phy_win) > 0 and phy_win.shape[1] >= min_phy_cols:
         df["bvp"]  = phy_win[:, phy_map["bvp"]]
-        df["ecg"]  = phy_win[:, phy_map["ecg"]]
+        # ECG仅非17维版本存在
+        if "ecg" in phy_map:
+            df["ecg"]  = phy_win[:, phy_map["ecg"]]
         df["resp"] = phy_win[:, phy_map["resp"]]
         df["hr"]   = phy_win[:, phy_map["hr"]]
         df["hrv"]  = np.abs(phy_win[:, phy_map["hrv"]])
@@ -390,43 +328,128 @@ def entropy_weights(df):
     return dict(zip(df.columns, w))
 
 
-def combine_weights(ahp_w, ent_w, features):
-    """乘法合成组合权重，无共同特征时退化为熵权"""
-    common_features = [f for f in features if f in ahp_w and f in ent_w]
+def critic_weights(df):
+    """
+    CRITIC法客观赋权（严格匹配论文公式）
+    步骤：Min-Max标准化 → 对比强度(标准差) → 冲突性 → 信息量 → 权重归一化
+    """
+    if df.empty or len(df.columns) == 0:
+        return {}
+
+    X = df.values.astype(float)
+    n, m = X.shape
+
+    # 步骤1：Min-Max标准化 [0,1]
+    col_min = X.min(axis=0)
+    col_max = X.max(axis=0)
+    denom = col_max - col_min
+    denom[denom == 0] = 1.0
+    X_std = (X - col_min) / denom
+
+    # 步骤2：对比强度 σ_j（标准差）
+    sigma = np.std(X_std, axis=0, ddof=0)
+
+    # 步骤3：指标冲突性 f_j = sum(1 - r_jk)
+    corr_matrix = np.corrcoef(X_std, rowvar=False)
+    conflict = np.sum(1 - corr_matrix, axis=1)
+
+    # 步骤4：CRITIC信息量 C_j
+    c_score = sigma * conflict
+
+    # 步骤5：归一化权重
+    if c_score.sum() == 0:
+        w = np.ones(m) / m
+    else:
+        w = c_score / c_score.sum()
+
+    return dict(zip(df.columns, w))
+
+
+def get_structural_weights(method, features_df, save_path=None):
+    """
+    统一获取结构性权重（根据配置自动选择AHP/CRITIC）
+    :param method: ahp_entropy / critic_entropy
+    """
+    if method == "ahp_entropy":
+        return ahp_weights_adapted(save_path=save_path)
+    elif method == "critic_entropy":
+        return critic_weights(features_df)
+    else:
+        raise ValueError(f"不支持的权重方法: {method}")
+
+
+def combine_weights(structural_w, ent_w, features):
+    """
+    乘法合成组合权重
+    :param structural_w: AHP权重 或 CRITIC权重
+    """
+    common_features = [f for f in features if f in structural_w and f in ent_w]
     if not common_features:
-        ent_w_complete = {}
-        for f in features:
-            ent_w_complete[f] = ent_w.get(f, 1 / len(features))
+        ent_w_complete = {f: ent_w.get(f, 1/len(features)) for f in features}
         total = sum(ent_w_complete.values())
-        return {k: v / total for k, v in ent_w_complete.items()}
-    combined = np.array([ahp_w[f] * ent_w[f] for f in common_features])
+        return {k: v/total for k,v in ent_w_complete.items()}
+    
+    combined = np.array([structural_w[f] * ent_w[f] for f in common_features])
     combined = combined / combined.sum()
     return dict(zip(common_features, combined))
 
 
 # ====================== 5. 波动量计算 ======================
-def calculate_fluctuation(df, weights, target_std=0.025):
+def calculate_fluctuation(df, weights):
     """
-    计算驾驶能力波动量 A_fl，使结果近似正态分布且集中于 [-0.05, 0.05]。
+    严格按照论文公式计算驾驶能力波动量
+    步骤1：特征正向化 + Min-Max标准化 [0,1]
+    步骤2：加权求和 → 原始波动量 S_fl_raw
+    步骤3：Min-Max归一化 → [-1,1] 得到最终波动量 A_fl
+    """
+    feature_cols = [f for f in weights.keys() if f in df.columns]
+    if not feature_cols:
+        return np.array([]), np.array([])
 
-    核心改动（相较于原版）：
-    ① 秩归一化（rank normalization）：将每列映射到 (0,1) 均匀分布，
-       彻底消除零膨胀、重尾、偏态对综合得分的影响。
-       多个均匀分布的加权和由中心极限定理趋向正态分布。
-    ② 自动校准（zero-centering + std rescaling）：强制 mean(A_fl)=0，
-       并将标准差缩放到 target_std=0.025，使约 95% 的值落在
-       [-0.05, 0.05] 区间内，无需手动调节 k 参数。
+    X = df[feature_cols].values.astype(float)
 
-    参数
+    # ====================== 论文步骤1：Min-Max标准化 [0,1] ======================
+    col_min = X.min(axis=0)
+    col_max = X.max(axis=0)
+    denom = col_max - col_min
+    denom[denom == 0] = 1.0  # 避免除零
+    X_prime = (X - col_min) / denom  # 即论文中的 x'_ij
+
+    # ====================== 论文步骤2：加权求和 原始波动量 ======================
+    weight_vals = np.array([weights[f] for f in feature_cols])
+    S_fl_raw = np.dot(X_prime, weight_vals)  # 公式3.17
+
+    # ====================== 论文步骤3：归一化到 [-1, 1] ======================
+    S_min = S_fl_raw.min()
+    S_max = S_fl_raw.max()
+    if S_max - S_min == 0:
+        A_fl = np.zeros_like(S_fl_raw)
+    else:
+        # 公式3.18
+        A_fl = 2 * (S_fl_raw - S_min) / (S_max - S_min) - 1
+
+    # ====================== 或者：归一化到 [0, 1] ======================
+    # S_min = S_fl_raw.min()
+    # S_max = S_fl_raw.max()
+    # if S_max - S_min == 0:
+    #     A_fl = np.zeros_like(S_fl_raw) + 0.5 # 若全为同一值，设为中间值0.5
+    # else:
+    #     # 【核心修改】：直接缩放到 [0, 1]
+    #     A_fl = (S_fl_raw - S_min) / (S_max - S_min)
+
+    return A_fl, S_fl_raw
+
+
+def calculate_fluctuation_norm(df, weights, target_std=0.025):
+    """
+    计算驾驶能力波动量 A_fl，严格限制在 [-1, 1]，近似正态分布。
     ----
     df         : 筛选后的特征 DataFrame
     weights    : 组合权重字典
-    target_std : 目标标准差，默认 0.025（对应 95% ≈ ±2σ = ±0.05）
-
-    返回
-    ----
-    A_fl : 校准后的波动量数组，均值≈0，std≈target_std
-    S_fl : 秩归一化加权综合得分（未校准，供中间诊断用）
+    target_std : 目标标准差，默认 0.025
+    返回：
+    A_fl : 最终波动量，严格 ∈ [-1, 1]，均值≈0
+    S_fl : 秩归一化加权综合得分（未校准，供诊断用）
     """
     feature_cols = [f for f in weights.keys() if f in df.columns]
     if not feature_cols:
@@ -450,35 +473,44 @@ def calculate_fluctuation(df, weights, target_std=0.025):
     if std > 0:
         A_fl = S_centered / std * target_std
     else:
-        A_fl = S_centered  # 极端退化情况
+        A_fl = S_centered
+
+    # ===================== 核心修改 =====================
+    # ③ 严格缩放到 [-1, 1] 范围（保留相对大小，无数据截断）
+    min_val = A_fl.min()
+    max_val = A_fl.max()
+    if max_val > min_val:  # 避免除零
+        A_fl = 2 * (A_fl - min_val) / (max_val - min_val) - 1
+    # ====================================================
 
     return A_fl, S_fl
 
 
-def save_feature_weights(ahp_w, ent_w, combined_w, outdir):
-    """Save combined feature weights"""
-    existing_features = sorted(
-        set(ahp_w.keys()) | set(ent_w.keys()) | set(combined_w.keys())
-    )
+def save_feature_weights(weight_method, structural_w, ent_w, combined_w, outdir):
+    """
+    保存特征权重（自动适配AHP/CRITIC列名）
+    """
+    suffix = "AHP" if weight_method == "ahp_entropy" else "CRITIC"
+    existing_features = sorted(set(structural_w.keys()) | set(ent_w.keys()) | set(combined_w.keys()))
+    
     weight_data = []
     for feat_name in existing_features:
-        ahp_val = ahp_w.get(feat_name, 0.0)
+        s_val = structural_w.get(feat_name, 0.0)
         ent_val = ent_w.get(feat_name, 0.0)
         comb_val = combined_w.get(feat_name, 0.0)
-        if ahp_val == 0.0 and ent_val == 0.0 and comb_val == 0.0:
+        if all([s_val==0, ent_val==0, comb_val==0]):
             continue
-        weight_data.append(
-            {
-                "feature_name": feat_name,
-                "AHP_weight": round(ahp_val, 4),
-                "entropy_weight": round(ent_val, 4),
-                "combined_weight": round(comb_val, 4),
-            }
-        )
+        weight_data.append({
+            "feature_name": feat_name,
+            f"{suffix}_weight": round(s_val, 4),
+            "entropy_weight": round(ent_val, 4),
+            "combined_weight": round(comb_val, 4)
+        })
+    
     weight_df = pd.DataFrame(weight_data)
     save_path = os.path.join(outdir, "Afl_feature_combined_weights.csv")
     weight_df.to_csv(save_path, index=False, encoding="utf-8-sig")
-    print(f"实际有效特征权重已保存：共 {len(weight_data)} 个特征 → {save_path}")
+    print(f"权重文件已保存：{save_path}")
 
 
 def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, outdir):
@@ -504,7 +536,7 @@ def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result
     # 2. 保存为统一的CSV文件
     dropped_df = pd.DataFrame(dropped_data)
     dropped_df.to_csv(
-        os.path.join(outdir, "Afl_dropped_features.csv"),  # 统一文件名
+        os.path.join(outdir, "Afl_dropped_features.csv"),
         index=False, encoding="utf-8-sig"
     )
     
@@ -633,7 +665,7 @@ def main():
         if act_win is None:
             print(f"跳过样本{i+1}：无有效窗口")
             sample_window_counts.append(0)
-            sample_field_list.append(np.array([]))  # <--- 新增：无窗口时存空数组
+            sample_field_list.append(np.array([]))
             continue
         field_vals = act_win[:, -1].astype(int)
         field_vals = np.clip(field_vals, 0, 3)
@@ -671,34 +703,46 @@ def main():
 
     print(f"\n=== 特征筛选完成 ===")
     print(f"相关性筛选删除特征: {dropped_corr}")
-    print(f"VIF筛选删除特征: {dropped_vif}")  # 新增打印
+    print(f"VIF筛选删除特征: {dropped_vif}")
     print(f"最终保留特征: {list(features_final.columns)}")
 
     if features_final.empty:
         raise RuntimeError("所有特征被筛选删除，无法继续计算")
 
-    # 4. 权重计算
-    ahp_w = ahp_weights_adapted(save_path=os.path.join(res_dir, "Afl_ahp_weights.csv"))
+    # 4. 权重计算（支持AHP/CRITIC + 熵权）
+    weight_method = config.get("weight_method", "critic_entropy")
+    if args.weight_method:
+        weight_method = args.weight_method
+    
+    print(f"\n=== 权重计算模式：{weight_method} ===")
+    structural_w = get_structural_weights(
+        method=weight_method,
+        features_df=features_final,
+        save_path=os.path.join(res_dir, "Afl_structural_weights.csv")
+    )
     ent_w = entropy_weights(features_final)
-    combined_w = combine_weights(ahp_w, ent_w, features_final.columns)
+    combined_w = combine_weights(structural_w, ent_w, features_final.columns)
+    
     print(f"\n=== 权重计算完成 ===")
     print("组合权重（特征: 权重）:")
     for f, w in combined_w.items():
         print(f"  {f}: {w:.4f}")
 
     # 5. 波动量计算（秩归一化 + 自动校准）
-    A_fl, S_fl = calculate_fluctuation(features_final, combined_w, target_std=0.025)
+    # A_fl, S_fl = calculate_fluctuation(features_final, combined_w)
+    A_fl, S_fl = calculate_fluctuation_norm(features_final, combined_w, target_std=0.025)
     print(f"\n=== 波动量计算完成 ===")
     print(f"波动量范围: [{A_fl.min():.4f}, {A_fl.max():.4f}]")
-    print(f"波动量均值: {A_fl.mean():.4f}")
-    print(f"波动量标准差: {A_fl.std():.4f}")
-    stats_range = config["fluctuation_stats_range"]
-    in_range = (
-        np.sum((A_fl >= stats_range["min"]) & (A_fl <= stats_range["max"]))
-        / len(A_fl)
-        * 100
-    )
-    print(f"落在[{stats_range['min']}, {stats_range['max']}]的比例: {in_range:.1f}%")
+
+    # 计算均值和标准差
+    mean_val = A_fl.mean()
+    std_val = A_fl.std()
+    print(f"波动量均值: {mean_val:.4f}")
+    print(f"波动量标准差: {std_val:.4f}")
+
+    # ±1σ 区间占比（删除了原配置区间打印）
+    in_sigma_ratio = np.mean((A_fl >= mean_val - std_val) & (A_fl <= mean_val + std_val)) * 100
+    print(f"落在 ±1σ 区间的比例: {in_sigma_ratio:.1f}%")
 
     # 6. 拆分波动量为67个样本
     sample_fluctuations = []
@@ -728,7 +772,7 @@ def main():
 
     # 8. 保存论文 CSV
     save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, res_dir)
-    save_feature_weights(ahp_w, ent_w, combined_w, res_dir)
+    save_feature_weights(weight_method, structural_w, ent_w, combined_w, res_dir)
     save_fluctuation_stats(A_fl, res_dir, config)
     save_fluctuation_by_group(A_fl, None, res_dir, config)
     print(f"论文CSV已保存至:   {res_dir}")

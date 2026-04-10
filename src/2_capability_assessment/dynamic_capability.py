@@ -173,11 +173,58 @@ def calculate_dynamic_capability(
     """
     calc_params = config["calculation"]
     ab_mode     = calc_params.get("ab_mode", "Ab")
-    ad_min      = calc_params.get("ad_output_min", 0.50)
+    ad_min      = calc_params.get("ad_output_min", 0.00)
     ad_max      = calc_params.get("ad_output_max", 1.00)
 
     # ── 3.1 逐实验计算原始 Ad ──────────────────────────────────────
-    raw_ad_sample  = []   # 每个实验的原始 Ad 数组（未标准化）
+    # 拼接所有实验的 Ab 和 Afl 样本，用于客观赋权
+    all_ab_for_weight = []
+    all_afl_for_weight = []
+    for exp_id in range(len(sample_afl)):
+        ab_val = exp_ab_map.get(exp_id, 0.70)
+        afl_arr = np.array(sample_afl[exp_id], dtype=np.float64)
+        afl_arr = afl_arr[np.isfinite(afl_arr)]
+        if len(afl_arr) == 0:
+            continue
+        # 基准能力为固定值，重复匹配波动量样本长度
+        all_ab_for_weight.extend([ab_val] * len(afl_arr))
+        all_afl_for_weight.extend(afl_arr.tolist())
+
+    # 调用函数计算组合权重
+    w_ab, w_afl = compute_critic_entropy_weight(
+        np.array(all_ab_for_weight),
+        np.array(all_afl_for_weight)
+    )
+
+    # ── 3.1 确定权重 (Fixed 或 Objective) + 逐实验计算 Ad──────────────────────────────
+    # 确定权重
+    weight_mode = calc_params.get("weight_mode", "fixed")
+    
+    if weight_mode == "objective":
+        # 模式1：调用 CRITIC+熵权法 计算客观权重
+        print("🔄 使用 CRITIC+熵权法 计算客观权重...")
+        all_ab_for_weight = []
+        all_afl_for_weight = []
+        for exp_id in range(len(sample_afl)):
+            ab_val = exp_ab_map.get(exp_id, 0.70)
+            afl_arr = np.array(sample_afl[exp_id], dtype=np.float64)
+            afl_arr = afl_arr[np.isfinite(afl_arr)]
+            if len(afl_arr) == 0: continue
+            all_ab_for_weight.extend([ab_val] * len(afl_arr))
+            all_afl_for_weight.extend(afl_arr.tolist())
+        
+        w_ab, w_afl = compute_critic_entropy_weight(
+            np.array(all_ab_for_weight),
+            np.array(all_afl_for_weight)
+        )
+    else:
+        # 模式2：从 YAML 读取固定权重 (默认)
+        w_ab = calc_params["ad_weights"]["ab_weight"]
+        w_afl = calc_params["ad_weights"]["afl_weight"]
+        print(f"🔧 使用 YAML 固定权重：Ab={w_ab}, Afl={w_afl}")
+
+    # 逐实验计算 Ad
+    raw_ad_sample  = []
     exp_dynamic_data = []
 
     for exp_id in range(len(sample_afl)):
@@ -188,7 +235,8 @@ def calculate_dynamic_capability(
             raw_ad_sample.append(np.array([]))
             continue
 
-        ad_arr = ab + afl_arr   # Ad_raw = A_b(c) + A_fl
+        # 🔥 核心：使用上方确定的权重进行计算
+        ad_arr = w_ab * ab + w_afl * afl_arr
         raw_ad_sample.append(ad_arr)
 
         group = (
@@ -287,7 +335,7 @@ def calculate_dynamic_capability(
 # ====================== 4. 结果验证 ======================
 def validate_results(all_dynamic_cap, config):
     calc_params = config["calculation"]
-    ad_min = calc_params.get("ad_output_min", 0.50)
+    ad_min = calc_params.get("ad_output_min", 0.00)
     ad_max = calc_params.get("ad_output_max", 1.00)
     mid_lo = ad_min + (ad_max - ad_min) * 0.1
     mid_hi = ad_min + (ad_max - ad_min) * 0.9
@@ -352,7 +400,70 @@ def save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stat
         pickle.dump(ad_result, f)
     print(f"   PKL 结果已保存：{pkl_path}")
 
-    print(f"\n💾 结果已保存至：{out}（前缀：{prefix}）")
+    print(f"\n💾 结果已保存至：{out}")
+
+# ====================== CRITIC+熵权法 组合权重计算 ======================
+def compute_critic_entropy_weight(ab_samples, afl_samples):
+    """
+    严格按照论文公式实现：CRITIC法 + 熵权法 + 乘法合成组合权重
+    用于计算 基准能力(Ab) 和 波动量(Afl) 的客观权重
+    :param ab_samples: 全局所有样本的基准能力值 (数组)
+    :param afl_samples: 全局所有样本的波动量值 (数组)
+    :return: w_ab, w_afl (组合权重，和为1)
+    """
+    # 1. 数据清洗：去除无效值
+    valid_mask = np.isfinite(ab_samples) & np.isfinite(afl_samples)
+    ab = ab_samples[valid_mask]
+    afl = afl_samples[valid_mask]
+    
+    if len(ab) < 10:
+        raise ValueError("有效样本数量不足，无法计算权重！")
+    
+    # 构建指标矩阵 (n样本, 2指标)
+    df = pd.DataFrame({"Ab": ab, "Afl": afl})
+    n, m = df.shape  # n=样本数, m=指标数=2
+
+    # ==================== 步骤1：Min-Max标准化（论文步骤） ====================
+    def min_max_normalize(x):
+        return (x - x.min()) / (x.max() - x.min()) if x.max() != x.min() else np.zeros_like(x)
+    df_norm = df.apply(min_max_normalize)
+
+    # ==================== 步骤2：计算CRITIC权重（论文公式3.9-3.12） ====================
+    # 对比强度：标准差
+    sigma = df_norm.std()
+    # 指标间Pearson相关系数
+    corr = df_norm.corr()
+    # 冲突性：f_j = Σ(1-r_jk)
+    conflict = (1 - corr).sum(axis=1)
+    # CRITIC信息量：C_j = σ_j × f_j
+    critic_info = sigma * conflict
+    # CRITIC权重归一化
+    w_critic = critic_info / critic_info.sum()
+
+    # ==================== 步骤3：计算熵权法权重（论文公式3.13-3.15） ====================
+    # 样本比重 p_ij（避免log(0)报错）
+    p = df_norm / df_norm.sum()
+    p = p.replace(0, np.finfo(float).eps)
+    # 信息熵 e_j
+    entropy = -1 / np.log(n) * (p * np.log(p)).sum()
+    # 差异系数 + 熵权
+    g = 1 - entropy
+    w_entropy = g / g.sum()
+
+    # ==================== 步骤4：乘法合成组合权重（论文公式3.16） ====================
+    combined_raw = w_critic * w_entropy
+    w_combined = combined_raw / combined_raw.sum()
+
+    # 打印权重结果
+    print("\n" + "="*50)
+    print("📊 CRITIC + 熵权法 组合权重计算完成")
+    print("="*50)
+    print(f"🔹 基准能力(Ab) 权重：{w_combined['Ab']:.4f}")
+    print(f"🔹 波动量(Afl)    权重：{w_combined['Afl']:.4f}")
+    print(f"🔹 权重总和验证：{w_combined.sum():.4f}")
+    print("="*50 + "\n")
+
+    return w_combined["Ab"], w_combined["Afl"]
 
 # ====================== 主函数 ======================
 if __name__ == "__main__":

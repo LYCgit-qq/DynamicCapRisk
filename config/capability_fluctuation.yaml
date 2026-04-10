@@ -1,11 +1,15 @@
 # 路径配置
 # data_path: "data/processed/raw_data.pkl"
 # data_path: "data/processed/raw_data_22.pkl"
-data_path: "data/processed/raw_data_20.pkl"
+# data_path: "data/processed/raw_data_20.pkl"
+data_path: "data/processed/raw_data_17.pkl"
 output_path: "output/1_capability_assessment/results/Afl_capability_fluctuation.pkl"
 visualization_output_dir: "output/1_capability_assessment/figures"
 subject_exp_map_csv: "data/raw/被试-实验ID映射.csv"  # 被试-实验ID映射文件
 ability_label_csv: "output/1_capability_assessment/results/Ab_cluster_labels.csv"  # 被试-能力等级标签文件
+
+# 组合赋权方法：ahp_entropy 或 critic_entropy
+weight_method: critic_entropy
 
 # 窗口配置（单位：秒）
 window_seconds: 3

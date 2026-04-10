@@ -1,0 +1,26 @@
+# D:\Local\DynamicCapRisk\config\capability_validator.yaml
+# 动态驾驶能力Ad有效性验证 - 完美版
+paths:
+  raw_pkl: "data/processed/raw_data.pkl"
+  ad_csv: "output/1_capability_assessment/results/Ad_Ab_global_values.csv"
+  output_dir: "output/1_capability_assessment/validation"
+  performance_csv: "performance_metrics.csv"
+
+window:
+  window_seconds: 3
+  act_hz: 60
+
+# 完美版阈值
+event_thresholds:
+  lateral_offset_thresh: 2.5    # 横向偏移(m)
+  lon_accel_g: 1.0              # 纵向加速度(g)
+  steer_vel_thresh: 100         # 转向角速度(°/s)
+
+# Ad等级划分
+ad_levels:
+  threshold_low: 0.30
+  threshold_high: 0.60
+  order: ["低能力", "中能力", "高能力"]
+
+figure:
+  dpi: 150

@@ -157,7 +157,7 @@ def quantify_benchmark_ability(
     """聚类中心级 Ab（仅 3 个值，原始逻辑不变）"""
     cn = (centers - centers.min().min()) / (centers.max().max() - centers.min().min())
     composite_score = cn.mean(axis=1)
-    benchmark_ability = 0.55 + 0.4 * composite_score
+    benchmark_ability = composite_score  
     return pd.DataFrame(
         {"综合得分S^c": composite_score, "基准能力值A_b": benchmark_ability}
     )
@@ -192,8 +192,6 @@ def compute_individualized_abc(
        Abc > 中能力组 > 低能力组；再对全局 32 个值做
        秩归一化 → 均匀分布 → 正态分布（Box-Rank 变换）。
 
-    4. 线性缩放到 [0.55, 0.95]
-       与 Ab 量程一致，方便后续联合使用。
 
     参数
     ----
@@ -312,7 +310,7 @@ def compute_individualized_abc(
         abc_01 = (normal_vals - z_min) / (z_max - z_min)
     else:
         abc_01 = np.full_like(normal_vals, 0.5)
-    subj_df["Abc"] = 0.55 + 0.40 * abc_01
+    subj_df["Abc"] = abc_01
 
     # ── Step 4：整理输出 ─────────────────────────────────────────────
     abc_df = subj_df[[id_col, "能力等级", "S_raw", "Abc"]].copy()
