@@ -7,7 +7,7 @@
 
 ### 输入数据
 - **文件格式**：Excel (.xlsx)
-- **子表要求**：需包含 `test00`、`test01`、`test02` 三个子表
+- **子表要求**：需包含 `work_zone_1`、`work_zone_2`、`work_zone_3` 三个子表
 - **表头字段**：距离 (m)、车道数、限速 (km/h)、施工区状态、标识牌类型、标识牌编码、车道变化预告、道路几何类型
 
 ### 标识牌编码说明
@@ -31,4 +31,4 @@
 
 
 ## 输出文件说明
-- **文件数量**：3个CSV文件（`test00_continuous.csv`、`test01_continuous.csv`、`test02_continuous.csv`）
+- **文件数量**：3个CSV文件（`work_zone_1_continuous.csv`、`work_zone_2_continuous.csv`、`work_zone_3_continuous.csv`）

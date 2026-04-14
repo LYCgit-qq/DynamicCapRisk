@@ -94,7 +94,7 @@ def build_performance(act_list, cfg):
 
     df = pd.DataFrame(rows)
     event_rate = df["abnormal_event"].mean() * 100
-    print(f"✅ 绩效计算完成 | 异常事件率：{event_rate:.1f}%")
+    print(f"✅ 绩效计算完成 | 异常事件率：{event_rate:.2f}%")
     print(f"   平均方向盘SASD：{df['steer_SASD'].mean():.4f}")
     return df
 
@@ -149,8 +149,8 @@ def validate_ad(merged, cfg):
         level_stats.append({
             "能力等级": lvl,
             "窗口数": len(sub),
-            "异常率": f"{sub['abnormal_event'].mean()*100:.1f}%",
-            "平均车道稳定性": round(sub['lane_stability'].mean(), 3),
+            "异常率": f"{sub['abnormal_event'].mean()*100:.2f}%",
+            "平均车道稳定性": round(sub['lane_stability'].mean(), 2),
             "平均方向盘SASD": round(sub['steer_SASD'].mean(), 4)
         })
     level_df = pd.DataFrame(level_stats)
@@ -176,7 +176,7 @@ def save_results(merged, perf_df, corr_df, level_df, cfg):
     with open(os.path.join(out_dir, "Ad_validation_report.txt"), "w", encoding="utf-8") as f:
         f.write("=== 动态驾驶能力Ad有效性验证报告（完美版）===\n")
         f.write(f"总窗口数：{len(merged)}\n")
-        f.write(f"异常事件率：{merged['abnormal_event'].mean()*100:.1f}%\n\n")
+        f.write(f"异常事件率：{merged['abnormal_event'].mean()*100:.2f}%\n\n")
         f.write("【相关性验证】\n")
         f.write(corr_df.to_string())
         f.write("\n\n【能力等级绩效】\n")

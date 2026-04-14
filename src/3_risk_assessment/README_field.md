@@ -14,12 +14,12 @@
 | 数值 | 对应的路段类别 | 场景标识 |
 |------|----------------|----------|
 | 0    | 自由路段       | test0    |
-| 1    | 标准施工区     | test00   |
-| 2    | 占一还一       | test01   |
-| 3    | 占而不还       | test02   |
+| 1    | 标准施工区     | work_zone_1   |
+| 2    | 占一还一       | work_zone_2   |
+| 3    | 占而不还       | work_zone_3   |
 
 - test0 区域的 F_S 统一记为 0
-- test00–test02 区域的 F_S 计算结果见 `output/2_risk_assessment/test00_risk_field.csv` ~ `test02_risk_field.csv`
+- work_zone_1–work_zone_3 区域的 F_S 计算结果见 `output/2_risk_assessment/work_zone_1_risk_field.csv` ~ `work_zone_3_risk_field.csv`
 
 ## 3. 数据结构与读取示例
 ### 3.1 读取数据

@@ -51,7 +51,7 @@ def process_sheet(df, sheet_name):
     # 5. 【核心修复】道路几何类型处理
     merged['道路几何类型'] = 'straight'  # 先默认全为straight
     
-    # 5.1 优先通过"标识牌类型"的"开始"/"结束"关键词识别区间（适配test01）
+    # 5.1 优先通过"标识牌类型"的"开始"/"结束"关键词识别区间（适配work_zone_2）
     intervals = []
     current_start = None
     current_type = None
@@ -71,7 +71,7 @@ def process_sheet(df, sheet_name):
             current_start = None
             current_type = None
     
-    # 5.2 特殊处理：如果没有识别到开始/结束标识（如test02全段bend）
+    # 5.2 特殊处理：如果没有识别到开始/结束标识（如work_zone_3全段bend）
     if not intervals:
         # 检查原始数据第一行的道路几何类型，如果非straight则全段应用
         first_geom = str(df_sorted.iloc[0]['道路几何类型'])
@@ -93,7 +93,7 @@ def process_sheet(df, sheet_name):
 def main(excel_path, output_dir='data/processed'):
     os.makedirs(output_dir, exist_ok=True)
     xl = pd.ExcelFile(excel_path)
-    sheet_names = ['test00', 'test01', 'test02']
+    sheet_names = ['work_zone_1', 'work_zone_2', 'work_zone_3']
     
     for sheet in sheet_names:
         if sheet not in xl.sheet_names:

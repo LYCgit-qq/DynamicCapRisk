@@ -1,91 +1,92 @@
-# 风险场强计算配置文件
-# Risk Field Calculation Configuration
+# D:\Local\DynamicCapRisk\config\risk_field.yaml
+# 贴合论文《风险场强量化方法》第4章的配置
 
-# ============= 权重系数（来自论文AHP-熵权组合赋权）=============
+# ============= 核心开关 =============
+# 论文明确使用 CRITIC-熵权组合赋权法，故设为 true
+use_critic_entropy: true
+
+# ============= 权重系数 =============
 weights:
-  # 综合场强权重
-  w_veh:  0.50    # 车辆交互权重（略降，为标志牌让权）
-  w_geo:  0.22    # 道路几何权重
-  w_sign: 0.28    # 道路设施权重（↑ 提升标志牌影响力）
+  # --- 综合场强顶层权重 (论文表4.2) ---
+  w_veh:  0.53    # 车辆交互 (影响最显著)
+  w_geo:  0.25    # 道路几何 (静态条件最突出)
+  w_sign: 0.22    # 道路设施 (静态环境基础影响)
 
-  # 道路设施子项权重
-  lambda_1: 0.65  # 标志影响权重（↑）
-  lambda_2: 0.35  # 施工区存在权重
+  # --- 道路设施场强 (s_sign) 子项权重 (默认值，CRITIC启用时会被覆盖) ---
+  lambda_1: 0.60  # 标志密度 (默认)
+  lambda_2: 0.40  # 施工区状态 (默认)
+
+  # --- 车辆交互场强 (s_veh) 子项权重 (预留，当前逻辑不使用) ---
+  mu_1: 0.40      # 跟车时距 (仅预留)
+  mu_2: 0.35      # 侧向密度 (仅预留)
+  mu_3: 0.25      # 速度差 (仅预留)
+
+  # --- 道路几何场强 (s_geo) 子项权重 (预留，CRITIC启用时自动计算) ---
+  nu_1: 0.45      # 曲率 (默认)
+  nu_2: 0.30      # 车道宽度 (默认)
+  nu_3: 0.25      # 车道数 (默认)
 
 # ============= 道路几何特征赋值规则 =============
 geometry:
-  # 曲率等级映射
   curvature_map:
-    straight: 0.0    # 直线
-    cross:    0.5    # 十字路口
-    bend:     1.0    # 弯道
-
-  # 车道数量赋值（逆向：车道越少赋值越高）
+    straight: 0.0
+    cross:    0.5
+    bend:     1.0
   lane_map:
     1: 1.0
     2: 0.5
     4: 0.0
-
-  # 车道宽度赋值（基于车道数推断）
   lane_width_map:
     4: 0.0
     2: 0.5
     1: 1.0
-
-  # 几何类型切换的平滑范围（m）
-  # 值越大，直线→弯道等切换越柔和；建议 20~50 m
   smooth_sigma: 30.0
 
 # ============= 道路设施场强参数 =============
 sign_field:
-  # 标志牌非对称衰减距离（m）
-  sigma_front: 120.0   # 前方（车辆接近时）感知范围，衰减慢
-  sigma_back:   40.0   # 后方（车辆已过）衰减范围，衰减快
-
-  # 施工区边界软化宽度（m）
-  # 将进出施工区的 0/1 硬跳变平滑为 S 形过渡，建议 15~30 m
+  sigma_front: 120.0
+  sigma_back:   40.0
   wz_smooth_sigma: 20.0
 
-# ============= 车辆交互场强参数 =============
+# ============= 车辆交互场强参数 (保持原有逻辑) =============
 vehicle_interaction:
-  baseline:         0.30   # 基线：无施工区直道
-  work_zone:        0.65   # 施工区内
-  complex_geometry: 0.85   # 施工区 + 弯道/路口
-
-  # 施工区/几何边界平滑宽度（m）
-  # 将阶跃赋值改为连续过渡，建议 20~35 m
+  baseline:         0.30
+  work_zone:        0.65
+  complex_geometry: 0.85
   boundary_smooth_sigma: 25.0
+  entry_peak:       0.98
+  entry_sigma:      25.0
+  entry_offset:    -15.0
 
-  # 入口汇道高斯峰
-  entry_peak:   0.98    # 峰值（叠加到基础场强上取最大值）
-  entry_sigma:  25.0    # 高斯峰半宽（m），控制峰的胖瘦
-  entry_offset: -15.0   # 峰心相对入口的偏移（m），负值=偏向入口前方
-
-# ============= 场强等级划分 =============
+# ============= 场强等级划分 (贴合论文表4.3) =============
 field_levels:
-  low:         [0.0, 0.3]
-  medium:      [0.3, 0.5]
-  medium_high: [0.5, 0.7]
-  high:        [0.7, 1.0]
+  low:         [0.0, 0.3]    # F_S < 0.3
+  medium:      [0.3, 0.55]   # 0.3 ≤ F_S < 0.55
+  medium_high: [0.55, 0.75]  # 0.55 ≤ F_S < 0.75
+  high:        [0.75, 1.0]   # F_S ≥ 0.75
 
 # ============= 计算参数 =============
 calculation:
-  window_size: 100    # 保留（兼容旧代码，当前未使用）
-
-  # 综合场强 F_S 的最终轻量平滑（m）
-  # 消除各分量归一化后残余的微小锯齿，不改变宏观形态
-  # 建议 5~15 m；设为 0 可关闭
+  window_size: 100
   final_smooth_sigma: 8.0
 
 # ============= 路径配置 =============
 paths:
-  input_dir: "data/processed"
+  input_dir:  "data/processed"
   output_dir: "output/2_risk_assessment/results"
-  vis_dir: "output/2_risk_assessment/figures"
+  vis_dir:    "output/2_risk_assessment/figures"
 
-# ============= 场景配置 =============
+# ============= 场景配置 (贴合论文4类典型场景) =============
 scenarios:
   default:
-    - test00
-    - test01
-    - test02
+    - work_zone_1    # 施工区1：管制车道缩减型
+    - work_zone_2    # 施工区2：几何场强车道偏移型
+    - work_zone_3    # 施工区3：中央车道封闭长曲线型
+
+# ============= 基线场景预设数值 =============
+baseline_stats:
+  s_geo_mean: 0.10
+  s_sign_mean: 0.15
+  s_veh_mean: 0.05
+  F_S_mean: 0.12
+  field_level: "低"

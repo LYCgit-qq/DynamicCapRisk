@@ -16,9 +16,9 @@ model:
 # ── 场景标签映射 ──────────────────────────────────────────────
 scenarios:
   label_csv_map:
-    1: 'test00_risk_field.csv'
-    2: 'test01_risk_field.csv'
-    3: 'test02_risk_field.csv'
+    1: 'work_zone_1_risk_field.csv'
+    2: 'work_zone_2_risk_field.csv'
+    3: 'work_zone_3_risk_field.csv'
   label_name:
     0: '基线场景'
     1: '施工区1'

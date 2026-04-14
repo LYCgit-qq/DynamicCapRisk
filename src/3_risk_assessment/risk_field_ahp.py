@@ -556,7 +556,7 @@ def main():
     --ahp_sign output/2_risk_assessment/risk_field_sign_weights.csv
 
   # 指定场景和输出目录
-  python risk_field.py -i data/processed -o output/2_risk_assessment -s test00 test01
+  python risk_field.py -i data/processed -o output/2_risk_assessment -s work_zone_1 work_zone_2
         """,
     )
 
