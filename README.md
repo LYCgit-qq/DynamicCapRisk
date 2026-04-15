@@ -39,10 +39,10 @@ DynamicCapRisk/
 ├── config/              # 配置文件
 ├── data/               # 数据目录
 ├── src/                # 源代码
-│   ├── 1_data_processing/        # 数据预处理（第2章）
-│   ├── 2_capability_assessment/  # 能力评估（第3章）
-│   ├── 3_risk_assessment/        # 风险评估（第4章）
-│   ├── 4_prediction/             # 预测模型（第5章）
+│   ├── data_processing/        # 数据预处理（第2章）
+│   ├── 1_capability_assessment/  # 能力评估（第3章）
+│   ├── 2_risk_assessment/        # 风险评估（第4章）
+│   ├── 3_prediction/             # 预测模型（第5章）
 │   ├── models/                   # 模型定义
 │   ├── utils/                    # 工具函数
 │   └── visualization/            # 可视化
@@ -109,27 +109,27 @@ pip install -r requirements.txt
 
 ### 1. 数据预处理
 ```bash
-python -m src.1_data_processing.main --config config/dataset.yaml
+python -m src.data_processing.main --config config/dataset.yaml
 ```
 
 ### 2. 能力评估
 ```bash
-python -m src.2_capability_assessment.main --config config/baseline_capability.yaml
+python -m src.1_capability_assessment.main --config config/baseline_capability.yaml
 ```
 
 ### 3. 风险评估
 ```bash
-python -m src.3_risk_assessment.main --config config/risk_evaluator.yaml
+python -m src.2_risk_assessment.main --config config/risk_evaluator.yaml
 ```
 
 ### 4. 模型训练
 ```bash
-python -m src.4_prediction.trainer --config config/trainer_dl.yaml
+python -m src.3_prediction.trainer --config config/trainer_dl.yaml
 ```
 
 ### 5. 模型评估
 ```bash
-python -m src.4_prediction.evaluator --config config/evaluator.yaml
+python -m src.3_prediction.evaluator --config config/evaluator.yaml
 ```
 
 ## 文档

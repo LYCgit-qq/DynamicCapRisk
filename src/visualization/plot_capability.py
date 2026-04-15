@@ -594,7 +594,7 @@ def plot_grouped_boxplot(fluctuation_sample, config, save_path=None):
         linewidth=1.2, ax=ax, legend=False,
     )
 
-    # ANOVA 标注 + 新增打印方差分析结果
+    # ANOVA 标注 + 打印方差分析结果
     f_stat, p_val = None, None
     if len(ordered_grades) >= 2:
         f_stat, p_val = stats.f_oneway(*[grade_flucts[g] for g in ordered_grades])
@@ -779,7 +779,7 @@ def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, conf
                  alpha=0.75, ax=ax,
                  line_kws={"linewidth": LINE_WIDTH, "color": PRIMARY_COLOR})
     
-    # ±1σ 阴影区间（新增）
+    # ±1σ 阴影区间
     ax.axvspan(ad_mean - ad_std, ad_mean + ad_std,
                color=LIGHT_FILL, alpha=0.5,
                label=f"±1σ [{ad_mean - ad_std:.3f}, {ad_mean + ad_std:.3f}]")

@@ -1,4 +1,4 @@
-# D:\Local\DynamicCapRisk\src\2_capability_assessment\capability_validator.py
+# D:\Local\DynamicCapRisk\src\1_capability_assessment\capability_validator.py
 """
 动态驾驶能力值 Ad 有效性验证模块
 ✅ 完美版：替换方向盘指标为SASD + 优化阈值 + 结果完美

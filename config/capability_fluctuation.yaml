@@ -13,10 +13,14 @@ weight_method: critic_entropy
 
 # 窗口配置（单位：秒）
 window_seconds: 3
+# sampling_rates:
+#   act: 60    # act采样率Hz
+#   eye: 120   # eye采样率Hz
+#   phy: 100   # phy采样率Hz
 sampling_rates:
   act: 60    # act采样率Hz
-  eye: 120   # eye采样率Hz
-  phy: 100   # phy采样率Hz
+  eye: 60   # eye采样率Hz
+  phy: 80   # phy采样率Hz
 
 # 特征筛选阈值
 correlation_threshold: 0.8

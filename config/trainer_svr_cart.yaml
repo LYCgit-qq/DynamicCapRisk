@@ -1,6 +1,6 @@
 # ============================================================
 # SVR / CART 传统机器学习基线 — 训练器配置
-# 对应脚本: src/4_prediction/trainer_svr_cart.py
+# 对应脚本: src/3_prediction/trainer_svr_cart.py
 #
 # 用法：
 #   python trainer_svr_cart.py              # 训练 YAML 指定的模型

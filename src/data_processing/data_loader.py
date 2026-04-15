@@ -1,4 +1,4 @@
-# D:\Local\DynamicCapRisk\src\1_data_processing\data_loader.py
+# D:\Local\DynamicCapRisk\src\data_processing\data_loader.py
 
 """读取 `data/raw` 下的原始数据文件。
 
@@ -7,7 +7,7 @@
 - 返回一个以文件名（不含后缀）为键、mat 内容为值的字典
 
 用法：
-    python src/1_data_processing/load_raw_data.py
+    python src/data_processing/load_raw_data.py
 或者在代码中导入 `load_mat_files` 使用。
 """
 

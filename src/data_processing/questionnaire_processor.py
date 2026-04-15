@@ -1,5 +1,5 @@
 """问卷预处理工具模块
-D:\Local\DynamicCapRisk\src\1_data_processing\questionnaire_processor.py
+D:\Local\DynamicCapRisk\src\data_processing\questionnaire_processor.py
 """
 
 import argparse
@@ -254,7 +254,7 @@ def generate_descriptive_stats(csv_path: Path | str, output_dir: Path | str):
 
 
 # ---------------------------------------------------------------------------
-# ✅ 新增函数：生成表3.2 驾驶行为与心理特征统计（均值+标准差）
+# 生成表3.2 驾驶行为与心理特征统计（均值+标准差）
 # ---------------------------------------------------------------------------
 def generate_behavior_mental_stats(processed_df: pd.DataFrame, output_dir: Path | str):
     """
@@ -306,7 +306,7 @@ def main():
                         help="原始问卷CSV路径")
     parser.add_argument("-o", "--output", default=BASE_DIR / "data" / "processed",
                         help="输出目录")
-    # ✅ 新增：命令行参数 - 控制数据增强倍数
+    # ✅ 命令行参数 - 控制数据增强倍数
     parser.add_argument("-a", "--augment", type=int, default=0,
                         help="数据增强倍数（0=不增强，1=样本×2，2=样本×3）")
     args = parser.parse_args()

@@ -2,7 +2,7 @@
 
 # ============================================================
 # MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型 — 训练器配置
-# 对应脚本: src/4_prediction/trainer.py
+# 对应脚本: src/3_prediction/trainer.py
 #
 # 切换模型只需修改 model.model_type：
 #   mtjp      → Multi-Task Joint Prediction（默认）

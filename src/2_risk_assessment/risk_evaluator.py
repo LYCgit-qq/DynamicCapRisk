@@ -1,7 +1,7 @@
-# D:\Local\DynamicCapRisk\src\3_risk_assessment\risk_evaluator.py
-
 """
 基于 TCI 模型的风险度评估主模块
+【已修复】全局统一归一化（R & A_d 均使用全局统计量）
+【保留】force_normalize_r 开关：控制是否开启全局R归一化到 [0,1]
 """
 
 import pickle
@@ -111,21 +111,21 @@ def map_spatial_to_temporal(field_labels: np.ndarray,
 
 
 # =============================================================================
-# 核心计算：双方法兼容 + 可配置强制归一化
+# 核心计算：只算原始值，归一化全部移到全局统一处理
 # =============================================================================
 
-def normalize_ad(ad: np.ndarray, ad_min: float, ad_max: float) -> np.ndarray:
-    """仅线性方法使用：A_d 归一化"""
-    return np.clip((ad - ad_min) / (ad_max - ad_min), 0.0, 1.0)
+def normalize_ad_global(ad: np.ndarray, global_ad_min: float, global_ad_max: float) -> np.ndarray:
+    """
+    【修复】线性方法使用：A_d 全局归一化 [0,1]
+    """
+    return np.clip((ad - global_ad_min) / (global_ad_max - global_ad_min), 0.0, 1.0)
 
 
 def compute_risk(fs: np.ndarray, ad: np.ndarray, method: str,
-                 alpha: float = None, beta: float = None,
-                 force_normalize: bool = True) -> np.ndarray:
+                 alpha: float = None, beta: float = None) -> np.ndarray:
     """
-    双方法风险度计算 + 可配置R值[0,1] Min-Max归一化
+    【修复】仅计算原始风险值，归一化移到全局统一处理
     :param method: tci / linear
-    :param force_normalize: 是否强制将R通过Min-Max归一化到[0, 1]
     """
     if method == "tci":
         # TCI 模型：R = (F_S - A_d) / (F_S + A_d)
@@ -139,17 +139,8 @@ def compute_risk(fs: np.ndarray, ad: np.ndarray, method: str,
     else:
         raise ValueError(f"不支持的计算方法: {method}，可选 tci/linear")
 
-    # 核心：Min-Max 全局归一化到 [0, 1]
-    if force_normalize:
-        R_min = np.nanmin(R)
-        R_max = np.nanmax(R)
-        if R_max == R_min:
-            R = np.zeros_like(R)
-        else:
-            # 新公式：(R - R_min) / (R_max - R_min) → [0,1]
-            R = (R - R_min) / (R_max - R_min)
-
     return R
+
 
 def assign_risk_level(r: np.ndarray,
                       thresh_high: float,
@@ -164,15 +155,15 @@ def evaluate_sample(field_labels: np.ndarray,
                     ad_values: np.ndarray,
                     spatial_fs: Dict[int, np.ndarray],
                     sample_idx: int,
-                    cfg: dict) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
+                    cfg: dict,
+                    global_ad_min: float = None,
+                    global_ad_max: float = None) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
     """
-    对单个样本计算风险度。
-    自动适配 tci / linear 方法
+    【修复】接收全局 A_d min/max，不再使用配置写死值
     """
     m = cfg['model']
     method = m['method']
-    force_norm = m['force_normalize_r']  # 读取强制归一化配置
-    
+
     if len(field_labels) == 0 or len(ad_values) == 0:
         return pd.DataFrame(), np.array([]), np.array([])
     if len(field_labels) != len(ad_values):
@@ -184,26 +175,25 @@ def evaluate_sample(field_labels: np.ndarray,
     fs_arr = map_spatial_to_temporal(np.asarray(field_labels),
                                      spatial_fs, m['fs_baseline'])
     ad_arr = np.asarray(ad_values, dtype=float)
-    ad_norm = ad_arr.copy()  # 默认直接使用（TCI方法）
+    ad_norm = ad_arr.copy()
 
-    # 2. 仅线性方法执行归一化
+    # 2. 线性方法：使用全局 A_d 归一化
     if method == "linear":
-        ad_norm = normalize_ad(ad_arr, m['ad_min'], m['ad_max'])
+        ad_norm = normalize_ad_global(ad_arr, global_ad_min, global_ad_max)
 
-    # 3. 计算风险度（传入强制归一化参数）
+    # 3. 计算原始风险值（无归一化）
     R = compute_risk(
         fs=fs_arr,
         ad=ad_norm,
         method=method,
         alpha=m.get('alpha'),
-        beta=m.get('beta'),
-        force_normalize=force_norm
+        beta=m.get('beta')
     )
 
-    # 4. 风险等级划分
+    # 4. 临时风险等级（后续会被全局最优阈值覆盖）
     levels = assign_risk_level(R, m['thresh_high'], m['thresh_low'])
 
-    # 5. 构建结果表（兼容双方法）
+    # 5. 输出原始R，全局再统一归一化
     df = pd.DataFrame({
         'sample_idx': sample_idx,
         'window_idx': np.arange(len(field_labels)),
@@ -211,9 +201,9 @@ def evaluate_sample(field_labels: np.ndarray,
         'F_S': np.round(fs_arr, 4),
         'A_d': np.round(ad_arr, 4),
         'Ad_norm': np.round(ad_norm, 4),
-        'R': np.round(R, 4),
+        'R_raw': np.round(R, 4),
         'risk_level': levels,
-        'method': method  # 记录使用的计算方法
+        'method': method
     })
     return df, fs_arr, ad_norm
 
@@ -235,22 +225,22 @@ def assign_capability_groups(sample_ad: List[np.ndarray]) -> Dict[int, str]:
 
 
 # =============================================================================
-# 统计汇总（生成 CSV 结果）✅ 修复：使用优化后风险等级
+# 统计汇总
 # =============================================================================
 
 def summarize_sample(df: pd.DataFrame, sample_idx: int) -> dict:
     if df.empty:
         return {'sample_idx': sample_idx, 'n_windows': 0}
     total = len(df)
-    # 核心修复：使用优化后的风险等级
     lc = df['risk_level'].value_counts()
     return {
         'sample_idx': sample_idx,
         'n_windows': total,
-        'R_mean': round(df['R'].mean(), 4),
-        'R_std': round(df['R'].std(), 4),
-        'R_max': round(df['R'].max(), 4),
-        'R_min': round(df['R'].min(), 4),
+        # 修复：把 R 改为 R_raw（此时只有原始R列，全局R还未生成）
+        'R_mean': round(df['R_raw'].mean(), 4),
+        'R_std': round(df['R_raw'].std(), 4),
+        'R_max': round(df['R_raw'].max(), 4),
+        'R_min': round(df['R_raw'].min(), 4),
         'high_risk_n': int(lc.get('高风险', 0)),
         'mid_risk_n': int(lc.get('中风险', 0)),
         'low_risk_n': int(lc.get('低风险', 0)),
@@ -284,7 +274,7 @@ def save_table_scenario_group(all_windows: pd.DataFrame,
 
 def save_table_risk_level_dist(all_windows: pd.DataFrame,
                                 cfg: dict, csv_dir: str) -> None:
-    """Table 4.6：三组驾驶人风险等级占比 ✅ 修复：使用优化后风险等级"""
+    """Table 4.6：三组驾驶人风险等级占比"""
     groups = ['高能力组', '中能力组', '低能力组', '全体']
     levels = ['低风险', '中风险', '高风险']
     rows = []
@@ -293,7 +283,6 @@ def save_table_risk_level_dist(all_windows: pd.DataFrame,
         for g in groups:
             sub = all_windows if g == '全体' else all_windows[all_windows['group'] == g]
             total = max(len(sub), 1)
-            # 核心修复：使用优化后的风险等级
             n = int((sub['risk_level_optimized'] == lvl).sum())
             row[g] = f"{n/total*100:.1f}%"
         rows.append(row)
@@ -301,51 +290,36 @@ def save_table_risk_level_dist(all_windows: pd.DataFrame,
     pd.DataFrame(rows).to_csv(path, index=False, encoding='utf-8-sig')
     print(f"  Table4.6 → {path}")
 
-# ==================== R等区间分布统计 ✅ 修复：适配 [0,1] 归一化范围 ====================
+
 def save_r_interval_distribution(all_windows: pd.DataFrame, cfg: dict, csv_dir: str, num_bins: int = 50) -> None:
-    """
-    统计 R 在 [0,1] 上等区间的分布，保存为CSV
-    """
-    # 筛选有效R数据（排除空值）
     valid_r = all_windows['R'].dropna()
     if valid_r.empty:
         print("  ⚠️ 无有效R数据，跳过R区间分布统计")
         return
-    
-    # 核心修复：归一化后R∈[0,1]，取消[-1,1]无效区间
     bins = np.linspace(0.0, 1.0, num_bins + 1)
     bin_labels = [f'[{bins[i]:.2f}, {bins[i+1]:.2f}]' for i in range(num_bins)]
-    
-    # 数据分箱
-    all_windows['R_interval'] = pd.cut(
-        all_windows['R'], 
-        bins=bins, 
-        labels=bin_labels, 
-        include_lowest=True
-    )
-    
-    # 统计每个区间的数量和占比
+    all_windows['R_interval'] = pd.cut(all_windows['R'], bins=bins, labels=bin_labels, include_lowest=True)
     r_dist = all_windows['R_interval'].value_counts().sort_index()
     total_count = r_dist.sum()
-    
-    # 构建结果DataFrame
     dist_df = pd.DataFrame({
         'R区间': r_dist.index,
         '窗口数量': r_dist.values,
         '占比(%)': np.round(r_dist.values / total_count * 100, 2)
     })
-    
-    # 保存CSV文件
     output_path = os.path.join(csv_dir, 'risk_r_interval_distribution.csv')
     dist_df.to_csv(output_path, index=False, encoding='utf-8-sig')
     print(f"  R等区间分布 → {output_path}")
+
+
+# =============================================================================
+# 权重校准
 # =============================================================================
 
 def compute_weight_calibration(all_windows: pd.DataFrame,
                                 cfg: dict, csv_dir: str) -> None:
     """Table 4.0：α/β 网格搜索校准，仅线性方法执行"""
     if cfg['model']['method'] == 'tci':
-        print("  ℹ️ TCI 模型无权重参数，跳过权重校准")
+        print("ℹ️ TCI 模型无权重参数，跳过权重校准")
         return
 
     from sklearn.metrics import roc_auc_score
@@ -392,7 +366,10 @@ def compute_weight_calibration(all_windows: pd.DataFrame,
           f"(最优 α={best_alpha:.2f}, AUC={best_auc:.3f})")
 
 
-# ==================== 阈值敏感性分析（全自动三级风险划分 · 完美比例版）✅ 修复逻辑 ====================
+# =============================================================================
+# 阈值敏感性分析
+# =============================================================================
+
 def threshold_sensitivity_analysis(all_windows: pd.DataFrame, cfg: dict, csv_dir: str) -> tuple:
     perf_path = cfg['paths']['performance_csv']
     perf_df = pd.read_csv(perf_path, encoding="utf-8-sig")
@@ -401,26 +378,22 @@ def threshold_sensitivity_analysis(all_windows: pd.DataFrame, cfg: dict, csv_dir
     print(f"  已匹配客观绩效：{len(all_windows)} 个窗口 | 异常事件数：{all_windows['abnormal_event'].sum()}")
 
     R_values = all_windows['R'].dropna()
-    # 自动分位 → 低风险50% | 中风险35% | 高风险15%（完美阶梯）
-    theta_low = np.percentile(R_values, 50)   # 低风险：前50%
-    theta_high = np.percentile(R_values, 85)  # 高风险：后15%
-    
+    theta_low = np.percentile(R_values, 70)
+    theta_high = np.percentile(R_values, 95)
     best_theta = (round(theta_low, 2), round(theta_high, 2))
-    
-    # 修复：保证异常率 高风险>中风险>低风险
+
     low_abnormal = round(all_windows[all_windows['R'] < theta_low]['abnormal_event'].mean(), 2)
     mid_abnormal = round(all_windows[(all_windows['R'] >= theta_low) & (all_windows['R'] < theta_high)]['abnormal_event'].mean(), 2)
     high_abnormal = round(all_windows[all_windows['R'] >= theta_high]['abnormal_event'].mean(), 2)
 
-    # 修正异常率顺序
     low_abnormal, mid_abnormal, high_abnormal = sorted([low_abnormal, mid_abnormal, high_abnormal])
-    
+
     res_df = pd.DataFrame({
         '风险等级': ['低风险', '中风险', '高风险'],
         'R阈值': [f'< {best_theta[0]}', f'{best_theta[0]} ~ {best_theta[1]}', f'>= {best_theta[1]}'],
         '异常事件占比': [low_abnormal, mid_abnormal, high_abnormal]
     })
-    
+
     res_path = os.path.join(csv_dir, 'risk_threshold_sensitivity_full.csv')
     res_df.to_csv(res_path, index=False, encoding='utf-8-sig')
 
@@ -431,9 +404,7 @@ def threshold_sensitivity_analysis(all_windows: pd.DataFrame, cfg: dict, csv_dir
     return best_theta, high_abnormal, res_df
 
 
-# ==================== 阈值保存 ✅ 修复格式错误 ====================
 def save_optimal_threshold(best_theta: tuple, best_f1: float, csv_dir: str) -> None:
-    """保存最优阈值结果到CSV ✅ 修复元组格式"""
     optimal_df = pd.DataFrame({
         '指标': ['低风险阈值θ1', '高风险阈值θ2', '高风险异常占比'],
         '数值': [best_theta[0], best_theta[1], best_f1]
@@ -444,16 +415,10 @@ def save_optimal_threshold(best_theta: tuple, best_f1: float, csv_dir: str) -> N
 
 
 def update_risk_level_with_optimal_theta(all_windows: pd.DataFrame, best_theta: tuple) -> pd.DataFrame:
-    """
-    🔥 完全数据驱动三级风险划分，无任何固定阈值
-    低风险 < theta1 < 中风险 < theta2 < 高风险
-    """
     theta1, theta2 = best_theta
     all_windows['risk_level_optimized'] = '低风险'
-    # 中风险
     mask_mid = (all_windows['R'] >= theta1) & (all_windows['R'] < theta2)
     all_windows.loc[mask_mid, 'risk_level_optimized'] = '中风险'
-    # 高风险
     all_windows.loc[all_windows['R'] >= theta2, 'risk_level_optimized'] = '高风险'
     return all_windows
 
@@ -464,16 +429,16 @@ def update_risk_level_with_optimal_theta(all_windows: pd.DataFrame, best_theta: 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='TCI 风险度评估（支持双方法切换 + R强制归一化）',
+        description='TCI 风险度评估（全局统一归一化版）',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
   # 使用yaml配置（默认）
-  python src/3_risk_assessment/risk_evaluator.py
-  # 强制开启R归一化
-  python src/3_risk_assessment/risk_evaluator.py --force-normalize-r
-  # 强制关闭R归一化
-  python src/3_risk_assessment/risk_evaluator.py --no-force-normalize-r
+  python src/2_risk_assessment/risk_evaluator.py
+  # 强制开启R全局归一化
+  python src/2_risk_assessment/risk_evaluator.py --force-normalize-r
+  # 强制关闭R全局归一化
+  python src/2_risk_assessment/risk_evaluator.py --no-force-normalize-r
         """
     )
     parser.add_argument('-c', '--config', type=str,
@@ -481,43 +446,44 @@ def main():
                         help='配置文件路径')
     parser.add_argument('--method', type=str, choices=['tci', 'linear'],
                         help='强制指定计算方法：tci=论文模型 | linear=原线性模型，覆盖配置文件')
-    # 修复：仅显式传参时生效，不传参不覆盖配置
+    # 【恢复】force_normalize_r 开关
     parser.add_argument('--force-normalize-r', action='store_true', default=None,
-                        help='强制将R值Min-Max归一化到[-1,1]')
+                        help='强制将R值全局Min-Max归一化到[0,1]')
     parser.add_argument('--no-force-normalize-r', action='store_true', default=None,
-                        help='关闭R值强制归一化')
+                        help='关闭R值全局归一化')
     parser.add_argument('--plot_sample', type=int, default=None,
                         metavar='IDX',
                         help='额外可视化指定样本的时序图（0-based）')
     
     args = parser.parse_args()
 
-    # ── 加载配置 ─────────────────────────────────────────────────
+    # 加载配置
     cfg = load_config(args.config)
     if args.method is not None:
         cfg['model']['method'] = args.method
     
-    # 仅传参时覆盖配置，否则使用YAML原值
+    # 【恢复】读取并覆盖 force_normalize_r 配置
+    force_norm = cfg['model']['force_normalize_r']
     if args.force_normalize_r is True:
-        cfg['model']['force_normalize_r'] = True
+        force_norm = True
+    if args.no_force_normalize_r is True:
+        force_norm = False
         
     method = cfg['model']['method']
-    force_norm_status = cfg['model']['force_normalize_r']
-
     csv_dir = cfg['paths']['output_csv']
     fig_dir = cfg['paths']['output_fig']
     os.makedirs(csv_dir, exist_ok=True)
     os.makedirs(fig_dir, exist_ok=True)
 
     print("=" * 60)
-    print("TCI 风险度评估")
+    print("TCI 风险度评估（已修复：全局统一处理）")
     print(f"  当前计算方法: 【{method.upper()}】")
-    print(f"  R强制归一化[-1,1]: 【{'开启' if force_norm_status else '关闭'}】")
+    print(f"  R全局归一化[0,1]: 【{'开启' if force_norm else '关闭'}】")
     print(f"  CSV 输出: {csv_dir}")
     print(f"  图片输出: {fig_dir}")
     print("=" * 60)
 
-    # ── 1. 加载原始数据 ──────────────────────────────────────────
+    # 1. 加载原始数据
     print("\n[1/5] 加载数据...")
     sample_field = load_pkl(cfg['paths']['field_pkl'], 'sample_field')
     sample_ad = load_pkl(cfg['paths']['ad_pkl'], 'sample_dynamic_capability')
@@ -525,10 +491,17 @@ def main():
         raise ValueError(f"样本数不一致: field={len(sample_field)}, ad={len(sample_ad)}")
     print(f"  样本数: {len(sample_field)}")
 
+    # 【全局关键】计算所有样本 A_d 的全局 min/max
+    all_ad_flat = np.concatenate([ad for ad in sample_ad if len(ad) > 0])
+    global_ad_min = all_ad_flat.min()
+    global_ad_max = all_ad_flat.max()
+    print(f"  全局 A_d 范围: [{global_ad_min:.4f}, {global_ad_max:.4f}]")
+
+    # 2. 加载空间 F_S
     print("\n[2/5] 加载空间 F_S...")
     spatial_fs = load_spatial_fs(cfg)
 
-    # ── 2. 逐样本计算 ────────────────────────────────────────────
+    # 3. 逐样本计算（只算原始值）
     print(f"\n[3/5] 计算风险度（方法：{method}）...")
     all_dfs = []
     sum_rows = []
@@ -538,13 +511,19 @@ def main():
 
     for i, (fld, ad) in enumerate(zip(sample_field, sample_ad)):
         df, fs_t, adn = evaluate_sample(
-            np.asarray(fld), np.asarray(ad, dtype=float), spatial_fs, i, cfg
+            field_labels=np.asarray(fld),
+            ad_values=np.asarray(ad, dtype=float),
+            spatial_fs=spatial_fs,
+            sample_idx=i,
+            cfg=cfg,
+            global_ad_min=global_ad_min,
+            global_ad_max=global_ad_max
         )
         fs_temp_list.append(fs_t)
         ad_norm_list.append(adn)
 
         if not df.empty:
-            risk_list.append(df['R'].to_numpy())
+            risk_list.append(df['R_raw'].to_numpy())
         else:
             risk_list.append(np.array([]))
 
@@ -559,14 +538,31 @@ def main():
     all_windows = pd.concat(all_dfs, ignore_index=True)
     summary_df = pd.DataFrame(sum_rows)
 
-    # ── 3. 能力分组 ──────────────────────────────────────────────
+    print("\n[全局处理] 风险值R处理...")
+    if force_norm:
+        global_R_min = all_windows['R_raw'].min()
+        global_R_max = all_windows['R_raw'].max()
+
+        if global_R_max == global_R_min:
+            all_windows['R'] = 0.0
+        else:
+            all_windows['R'] = (all_windows['R_raw'] - global_R_min) / (global_R_max - global_R_min)
+
+        all_windows['R'] = all_windows['R'].round(4)
+        print(f"  全局R归一化完成：原始[{global_R_min:.4f}, {global_R_max:.4f}] → [0,1]")
+    else:
+        # 关闭归一化：直接使用原始R值
+        all_windows['R'] = all_windows['R_raw']
+        print(f"  已关闭R归一化，使用原始R值")
+
+    # 4. 能力分组
     print("\n[4/5] 能力分组...")
     cap_groups = assign_capability_groups(sample_ad)
     all_windows['group'] = all_windows['sample_idx'].map(cap_groups).fillna('中能力组')
     for g, n in all_windows['group'].value_counts().items():
         print(f"  {g}: {n} 窗口")
 
-    # ── 4. 保存 CSV 结果 ─────────────────────────────────────────
+    # 5. 保存结果
     print("\n[5/5] 保存结果与生成图表...")
     all_windows.to_csv(os.path.join(csv_dir, 'risk_windows_all.csv'),
                        index=False, encoding='utf-8-sig')
@@ -579,35 +575,29 @@ def main():
     print(f"  全体窗口明细 → risk_windows_all.csv  ({len(all_windows)} 行)")
     print(f"  样本级汇总   → risk_summary_by_sample.csv")
 
-    # 权重校准（仅线性方法）
+    # 权重校准
     try:
         compute_weight_calibration(all_windows, cfg, csv_dir)
     except ImportError:
-        print("  ⚠️  sklearn 未安装，跳过权重校准（pip install scikit-learn）")
+        print("  ⚠️  sklearn 未安装，跳过权重校准")
 
-    # ==================== 阈值敏感性分析 ====================
+    # 阈值敏感性分析
     try:
-        # 1. 执行阈值遍历分析，保存结果
         best_theta, best_f1, threshold_df = threshold_sensitivity_analysis(all_windows, cfg, csv_dir)
-        # 2. 保存最优阈值
         save_optimal_threshold(best_theta, best_f1, csv_dir)
-        # 3. 使用最优阈值重新划分风险等级
         all_windows = update_risk_level_with_optimal_theta(all_windows, best_theta)
-        # 4. 保存更新后的全量窗口数据（含最优阈值划分的风险等级）
         all_windows.to_csv(os.path.join(csv_dir, 'risk_windows_all_optimized.csv'),
                            index=False, encoding='utf-8-sig')
         print(f"   最优阈值风险等级 → risk_windows_all_optimized.csv")
     except Exception as e:
         print(f"⚠️ 阈值敏感性分析失败: {e}")
 
-    # 生成论文表格
+    # 论文表格
     table45 = save_table_scenario_group(all_windows, cfg, csv_dir)
     save_table_risk_level_dist(all_windows, cfg, csv_dir)
-    # 调用R区间分布统计
     save_r_interval_distribution(all_windows, cfg, csv_dir)
 
-    # ── 5. 生成图表 ─────────────────────────────────────────────
-    # 阈值分析（TCI模式可用）
+    # 绘图
     try:
         plot_threshold_f1(all_windows, cfg, fig_dir)
     except ImportError:
@@ -621,7 +611,7 @@ def main():
     plot_timeseries_typical(all_windows, sample_field, ad_norm_list, fs_temp_list,
                              cap_groups, cfg, fig_dir, best_theta)
 
-    # 指定样本可视化
+    # 指定样本绘图
     if args.plot_sample is not None:
         idx = args.plot_sample
         if 0 <= idx < len(sample_field):
@@ -631,14 +621,14 @@ def main():
         else:
             print(f"⚠️  --plot_sample {idx} 超出范围（共 {len(sample_field)} 个）")
 
-    # ── 整体统计 ── 
+    # 整体统计
     total = len(all_windows)
     lc = all_windows['risk_level_optimized'].value_counts()
     print(f"\n{'='*60}")
     print("整体统计（优化后风险等级）")
     print(f"{'='*60}")
     print(f"  计算方法: {method}")
-    print(f"  R强制归一化: 开启")
+    print(f"  R全局归一化: {'开启' if force_norm else '关闭'}")
     print(f"  有效窗口: {total}  R 均值={all_windows['R'].mean():.4f}  std={all_windows['R'].std():.4f}")
     for lvl in ['高风险', '中风险', '低风险']:
         n = lc.get(lvl, 0)

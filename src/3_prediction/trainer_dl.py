@@ -1,4 +1,4 @@
-# src/4_prediction/trainer_dl.py
+# src/3_prediction/trainer_dl.py
 """
 MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型训练器
 

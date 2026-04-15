@@ -1,4 +1,4 @@
-# D:\Local\DynamicCapRisk\src\4_prediction\mtjp_model.py
+# D:\Local\DynamicCapRisk\src\3_prediction\mtjp_model.py
 
 """
 MT-JP 多模态Transformer联合预测模型
@@ -505,7 +505,7 @@ def build_model(cfg: dict) -> "MTJP":
         ffn_dim    = m.get("ffn_dim",    512),
         dropout    = m.get("dropout",    0.2),
         n_classes  = m.get("n_classes",  3),
-        ablation   = m.get("ablation",   "none"),   # ← 新增
+        ablation   = m.get("ablation",   "none"),
     )
     return model
 

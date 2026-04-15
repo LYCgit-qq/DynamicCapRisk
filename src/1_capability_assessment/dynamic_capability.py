@@ -1,4 +1,4 @@
-# D:\Local\DynamicCapRisk\src\2_capability_assessment\dynamic_capability.py
+# D:\Local\DynamicCapRisk\src\1_capability_assessment\dynamic_capability.py
 
 import os
 import pickle
@@ -420,9 +420,6 @@ def stat_ad_interval_distribution(all_dynamic_cap, config, num_bins=50):
     csv_path = os.path.join(output_dir, f"{prefix}_interval_distribution.csv")
     dist_stats.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
-    # 控制台打印结果
-    print(f"\n📊 Ad等区间分布统计（{num_bins}个等区间）")
-    print(dist_stats.to_string(index=False))
     print(f"✅ 区间分布文件已保存：{csv_path}")
 
     return dist_stats
@@ -515,7 +512,7 @@ if __name__ == "__main__":
     save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df,
                 group_stats, validate_dict, config)
     
-    # 调用新增函数：统计Ad等区间分布
+    # 调用函数：统计Ad等区间分布
     stat_ad_interval_distribution(all_dynamic_cap, config)
     
     print("\n===== 动态驾驶能力计算完成 =====")

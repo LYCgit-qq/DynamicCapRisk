@@ -5,7 +5,7 @@
             "name": "基准驾驶能力评估",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/2_capability_assessment/baseline_capability.py",
+            "program": "${workspaceFolder}/src/1_capability_assessment/baseline_capability.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -19,7 +19,7 @@
             "name": "驾驶能力波动计算",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/2_capability_assessment/capability_fluctuation.py",
+            "program": "${workspaceFolder}/src/1_capability_assessment/capability_fluctuation.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -33,7 +33,7 @@
             "name": "动态驾驶能力计算",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/2_capability_assessment/dynamic_capability.py",
+            "program": "${workspaceFolder}/src/1_capability_assessment/dynamic_capability.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -47,7 +47,7 @@
             "name": "风险场强计算",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/3_risk_assessment/risk_field.py",
+            "program": "${workspaceFolder}/src/2_risk_assessment/risk_field.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -61,7 +61,7 @@
             "name": "风险度计算",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/3_risk_assessment/risk_evaluator.py",
+            "program": "${workspaceFolder}/src/2_risk_assessment/risk_evaluator.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -75,7 +75,7 @@
             "name": "风险度计算结果验证",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/3_risk_assessment/risk_validator.py",
+            "program": "${workspaceFolder}/src/2_risk_assessment/risk_validator.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -89,7 +89,7 @@
             "name": "数据集构建",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/4_prediction/dataset.py",
+            "program": "${workspaceFolder}/src/3_prediction/dataset.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -103,7 +103,7 @@
             "name": "模型预测（深度模型）",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/4_prediction/trainer_dl.py",
+            "program": "${workspaceFolder}/src/3_prediction/trainer_dl.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -117,7 +117,7 @@
             "name": "模型预测（传统模型）",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/4_prediction/trainer_svr_cart.py",
+            "program": "${workspaceFolder}/src/3_prediction/trainer_svr_cart.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -131,7 +131,7 @@
             "name": "评估预测结果（MTJP）",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/4_prediction/evaluator.py",
+            "program": "${workspaceFolder}/src/3_prediction/evaluator.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -145,7 +145,7 @@
             "name": "评估预测结果（对比）",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/4_prediction/evaluator_compare.py",
+            "program": "${workspaceFolder}/src/3_prediction/evaluator_compare.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [

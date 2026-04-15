@@ -6,9 +6,9 @@
 - 提供将结果保存为 `pkl` 的函数
 
 用法：
-    python src/1_data_processing/read_questionnaire.py
+    python src/data_processing/read_questionnaire.py
 或者在代码中：
-    from src.1_data_processing.read_questionnaire import load_questionnaire, to_dict, save_pickle
+    from src.data_processing.read_questionnaire import load_questionnaire, to_dict, save_pickle
 """
 
 from pathlib import Path

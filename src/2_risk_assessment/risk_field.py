@@ -1,4 +1,4 @@
-# D:\Local\DynamicCapRisk\src\3_risk_assessment\risk_field.py
+# D:\Local\DynamicCapRisk\src\2_risk_assessment\risk_field.py
 
 """
 风险场强量化计算模块
@@ -306,7 +306,7 @@ def _collect_and_calculate_weights(scenario_list: list, input_dir: str) -> Dict[
 
 def calculate_geo_field(df: pd.DataFrame) -> pd.Series:
     geo_cfg = CONFIG['geometry']
-    weights = CONFIG['weights']  # 新增：读取nu权重
+    weights = CONFIG['weights']  # 读取nu权重
     distances = df['距离 (m)'].values.astype(float)
 
     c_hat = df['道路几何类型'].map(geo_cfg['curvature_map']).fillna(0.0).values
@@ -506,7 +506,7 @@ def calculate_comprehensive_field(df: pd.DataFrame) -> pd.DataFrame:
         F_S = adjust_Fs_distribution(F_S, threshold=0.03, lift=0.03)
     # ==========================================================================
 
-    # ===================== 新增：F_S全局强制归一化 =====================
+    # ===================== F_S全局强制归一化 =====================
     if force_norm_fs:
         F_S = force_normalize_FS(F_S)
     # ======================================================================
@@ -878,7 +878,7 @@ def main():
                 scenario_name=scenario,
                 output_dir=vis_dir
             )
-            # 新增 F_S 分布直方图
+            # F_S 分布直方图
             plot_Fs_distribution(result_df, scenario, vis_dir)
             
         plot_Fs_three_scenarios_evolution(

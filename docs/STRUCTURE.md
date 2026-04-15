@@ -53,10 +53,10 @@ DynamicCapRisk/
 └── src/                         # 源代码目录
     ├── __init__.py
     ├── __pycache__/             # Python缓存文件
-    ├── 1_data_processing/       # 数据处理模块（第2章）
-    ├── 2_capability_assessment/ # 能力评估模块（第3章）
-    ├── 3_risk_assessment/       # 风险评估模块（第4章）
-    ├── 4_prediction/            # 预测模块（第5章）
+    ├── data_processing/       # 数据处理模块（第2章）
+    ├── 1_capability_assessment/ # 能力评估模块（第3章）
+    ├── 2_risk_assessment/       # 风险评估模块（第4章）
+    ├── 3_prediction/            # 预测模块（第5章）
     ├── models/                  # 模型定义
     ├── trash/                   # 废弃代码目录
     ├── utils/                   # 工具函数
@@ -67,10 +67,10 @@ DynamicCapRisk/
 
 | 论文章节 | 模块 | 主要功能 |
 |---------|------|---------|
-| 第2章 | 1_data_processing | 数据采集与预处理 |
-| 第3章 | 2_capability_assessment | 动态驾驶能力评估 |
-| 第4章 | 3_risk_assessment | 风险状态评估 |
-| 第5章 | 4_prediction + models | 联合预测模型 |
+| 第2章 | data_processing | 数据采集与预处理 |
+| 第3章 | 1_capability_assessment | 动态驾驶能力评估 |
+| 第4章 | 2_risk_assessment | 风险状态评估 |
+| 第5章 | 3_prediction + models | 联合预测模型 |
 
 ## 核心算法实现
 
@@ -96,40 +96,40 @@ DynamicCapRisk/
 
 ```
 原始数据(raw/) 
-  ↓ [1_data_processing/]
+  ↓ [data_processing/]
 多模态数据
   ↓ [数据同步与预处理]
 同步数据（20Hz）
   ↓ [特征提取]
 11项驾驶特征
-  ├─→ [2_capability_assessment/] → 动态能力 Ad
-  ├─→ [3_risk_assessment/] → 风险度 R, 风险等级
-  └─→ [4_prediction/] → MT-JP模型 → 预测结果
+  ├─→ [1_capability_assessment/] → 动态能力 Ad
+  ├─→ [2_risk_assessment/] → 风险度 R, 风险等级
+  └─→ [3_prediction/] → MT-JP模型 → 预测结果
 ```
 
 ## 使用流程
 
 ### 1. 数据预处理
 ```bash
-python -m src.1_data_processing.main --config config/dataset.yaml
+python -m src.data_processing.main --config config/dataset.yaml
 ```
 
 ### 2. 能力评估
 ```bash
-python -m src.2_capability_assessment.main --config config/baseline_capability.yaml
+python -m src.1_capability_assessment.main --config config/baseline_capability.yaml
 ```
 
 ### 3. 风险评估
 ```bash
-python -m src.3_risk_assessment.main --config config/risk_evaluator.yaml
+python -m src.2_risk_assessment.main --config config/risk_evaluator.yaml
 ```
 
 ### 4. 模型训练
 ```bash
-python -m src.4_prediction.trainer --config config/trainer_dl.yaml
+python -m src.3_prediction.trainer --config config/trainer_dl.yaml
 ```
 
 ### 5. 模型评估
 ```bash
-python -m src.4_prediction.evaluator --config config/evaluator.yaml
+python -m src.3_prediction.evaluator --config config/evaluator.yaml
 ```

@@ -1,19 +1,7 @@
 # D:\Local\DynamicCapRisk\src\visualization\plot_risk.py
 
 """
-plot_risk_results.py
 风险度评估可视化模块
-生成论文第4章所需全部图表（Fig 4.5 ~ Fig 4.11 及单样本时序图）
-同时包含风险验证模块（risk_validator.py）的可视化函数：
-  - plot_roc_curve          ROC 曲线（原 validate_roc 内嵌绘图）
-  - plot_risk_event_rate    风险等级 × 事件发生率柱状图（原 validate_risk_level_event_rate 内嵌绘图）
-  - plot_r_boxplot     R 事件/无事件分布箱线图
-
-所有函数签名统一：
-    plot_xxx(data, cfg, fig_dir)
-    data  —— 计算结果（all_windows DataFrame 或其他数据结构）
-    cfg   —— 从 risk_evaluator.yaml / risk_validator.yaml 加载的配置字典
-    fig_dir —— 图片输出目录
 """
 
 import os
@@ -30,6 +18,7 @@ import seaborn as sns
 from scipy.signal import savgol_filter
 from scipy.interpolate import make_interp_spline
 from scipy.ndimage import gaussian_filter1d
+from sklearn.metrics import f1_score
 
 
 # ====================== 统一风格配置 ======================
@@ -475,48 +464,57 @@ def plot_Fs_distribution(df: pd.DataFrame, scenario_name: str, output_dir: str):
     _save_and_close(fig, save_path, "F_S分布直方图")
     
 # =============================================================================
-# Figure 4.5  阈值敏感性 F1 曲线
+# 阈值敏感性 F1 曲线
 # =============================================================================
 
 def plot_threshold_f1(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
     """
     Figure 4.5：遍历阈值 θ，计算各阈值下高风险识别 F1，标注最优点。
-    若无真实事件标签（event_label 列），以 R>0 作为代理标签。
-    适配 R∈[0,1] 范围
+    【修复】匹配主脚本真实标签列名 + 读取配置文件 + 适配 R∈[0,1]
+    真实标签：abnormal_event（主脚本合并的绩效标签），无则用 R>0 作为代理标签
     """
-    from sklearn.metrics import f1_score
     set_paper_style()
 
+    # 从配置文件读取阈值搜索参数（主脚本配置化）
     ts_cfg = cfg['threshold_search']
-    lo, hi, step = 0.0, 1.0, 0.05
+    lo = 0.0          # R全局归一化固定为0起始
+    hi = 1.0          # R全局归一化固定为1结束
+    step = ts_cfg['step']  # 从yaml配置读取步长
 
-    y      = (all_windows['event_label'].to_numpy(dtype=int)
-              if 'event_label' in all_windows.columns
-              else (all_windows['R'] > 0).astype(int).to_numpy())
+    # 匹配主脚本真实异常标签列名：abnormal_event（核心修复）
+    y = (all_windows['abnormal_event'].to_numpy(dtype=int)
+          if 'abnormal_event' in all_windows.columns
+          else (all_windows['R'] > 0).astype(int).to_numpy())
+    
     r = all_windows['R'].to_numpy()
-    thresholds   = np.arange(lo, hi + step / 2, step)
-    f1s    = [f1_score(y, (r >= t).astype(int), zero_division=0)
+    thresholds = np.arange(lo, hi + step / 2, step)
+    f1s = [f1_score(y, (r >= t).astype(int), zero_division=0)
               for t in thresholds]
 
+    # 查找最优F1阈值
     best_i = int(np.argmax(f1s))
-    fig, ax = plt.subplots(figsize=(7, 4.5))
+    best_theta = thresholds[best_i]
+    best_f1 = f1s[best_i]
+
+    # 绘图
+    fig, ax = plt.subplots(figsize=(10, 4.5))
     ax.plot(thresholds, f1s, 'o-', color=PRIMARY_COLOR, linewidth=LINE_WIDTH, markersize=7)
-    ax.scatter([thresholds[best_i]], [f1s[best_i]], color=SECONDARY_COLOR, s=100, zorder=5,
-               label=f'最优 θ={thresholds[best_i]:.2f}，F1={f1s[best_i]:.3f}')
-    ax.axvline(thresholds[best_i], color=SECONDARY_COLOR, linestyle='--', linewidth=1, alpha=0.5)
+    ax.scatter([best_theta], [best_f1], color=SECONDARY_COLOR, s=100, zorder=5,
+               label=f'最优 θ={best_theta:.2f}，F1={best_f1:.2f}')
+    ax.axvline(best_theta, color=SECONDARY_COLOR, linestyle='--', linewidth=1, alpha=0.5)
     ax.set_xlabel('阈值 θ')
     ax.set_ylabel('F1 值')
-    ax.set_title('图4.5  不同阈值下高风险识别F1值变化曲线')
+    # ax.set_title('图4.5  不同阈值下高风险识别F1值变化曲线')
     ax.set_xticks(np.round(thresholds, 2))
     ax.legend()
     ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'risk_eval_threshold_f1.png'), cfg['vis']['dpi'])
-
+    plt.close()
 
 # =============================================================================
-# Figure 4.6  R 整体分布直方图
+# R 整体分布直方图
 # =============================================================================
 
 def plot_r_histogram(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple) -> None:
@@ -546,7 +544,7 @@ def plot_r_histogram(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_th
 
 
 # =============================================================================
-# Figure 4.7  三组驾驶人 R 小提琴图
+# 三组驾驶人 R 小提琴图
 # =============================================================================
 
 def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple) -> None:
@@ -580,11 +578,11 @@ def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, bes
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'Fs_violin_by_group.png'), cfg['vis']['dpi'])
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_violin_by_group.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
-# Figure 4.8  场景×能力组 折线图
+# 场景×能力组 折线图
 # =============================================================================
 
 def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
@@ -617,7 +615,7 @@ def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) ->
 
 
 # =============================================================================
-# Figure 4.9  场景×能力组 箱线图
+# 场景×能力组 箱线图
 # =============================================================================
 
 def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
@@ -663,7 +661,7 @@ def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) 
 
 
 # =============================================================================
-# Figure 4.10  风险等级堆叠柱状图
+# 风险等级堆叠柱状图
 # =============================================================================
 
 def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
@@ -710,7 +708,7 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
 
 
 # =============================================================================
-# Figure 4.11  典型驾驶人时序曲线
+# 典型驾驶人时序曲线
 # =============================================================================
 
 def plot_timeseries_typical(all_windows: pd.DataFrame,
@@ -749,7 +747,7 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
             ('低能力组代表', _pick_rep('低能力组'))]
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=False)
-    fig.suptitle('图4.11  典型驾驶人风险度时序演化曲线', fontsize=15, fontweight='bold')
+    # fig.suptitle('图4.11  典型驾驶人风险度时序演化曲线', fontsize=15, fontweight='bold')
 
     for row_idx, (title, sidx) in enumerate(reps):
         ax     = axes[row_idx]

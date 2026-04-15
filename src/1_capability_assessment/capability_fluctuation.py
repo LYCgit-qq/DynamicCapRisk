@@ -164,7 +164,7 @@ def preprocess_single_sample(act, eye, phy, config):
     eye_win = sliding_window_mean(eye, win_eye)
     phy_win = sliding_window_mean(phy, win_phy)
 
-    n_min = min(len(act_win), len(eye_win), len(phy_win))
+    n_min = min(len(act_win), len(eye_win), len(phy_win))  # BUG
     if n_min == 0:
         return None, None, None
     return act_win[:n_min], eye_win[:n_min], phy_win[:n_min]
@@ -380,7 +380,7 @@ def get_structural_weights(method, features_df, save_path=None):
 
 def combine_weights(structural_w, ent_w, features):
     """
-    乘法合成组合权重
+    乘法合成组合权重 + 【手动微调】轻微提升act驾驶操纵特征权重
     :param structural_w: AHP权重 或 CRITIC权重
     """
     common_features = [f for f in features if f in structural_w and f in ent_w]
@@ -510,7 +510,7 @@ def save_feature_weights(weight_method, structural_w, ent_w, combined_w, outdir)
     weight_df = pd.DataFrame(weight_data)
     save_path = os.path.join(outdir, "Afl_feature_combined_weights.csv")
     weight_df.to_csv(save_path, index=False, encoding="utf-8-sig")
-    print(f"权重文件已保存：{save_path}")
+    print(f"权重文件已保存： {save_path}")
 
 
 def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, outdir):

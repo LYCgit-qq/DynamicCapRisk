@@ -1,4 +1,4 @@
-# D:\Local\DynamicCapRisk\src\4_prediction\evaluator_compare.py
+# D:\Local\DynamicCapRisk\src\3_prediction\evaluator_compare.py
 
 """
 MT-JP 多模型横向对比评估器
