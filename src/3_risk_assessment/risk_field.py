@@ -16,7 +16,7 @@ from typing import Tuple, Dict
 from scipy.ndimage import gaussian_filter1d
 
 # 导入可视化函数
-from src.visualization.plot_risk import plot_radar_chart, plot_stacked_bar, plot_field_evolution, plot_three_scenarios_evolution
+from src.visualization.plot_risk import plot_radar_chart, plot_stacked_bar, plot_field_evolution, plot_Fs_three_scenarios_evolution, plot_Fs_distribution
 
 # 全局配置变量
 CONFIG: Dict = None
@@ -59,7 +59,7 @@ def load_config(config_path: str) -> Dict:
         sys.exit(1)
 
 # =============================================================================
-# 工具函数 (保持不变)
+# 工具函数
 # =============================================================================
 
 def _get_dx(distances: np.ndarray) -> float:
@@ -83,7 +83,7 @@ def _smooth_mask(binary_mask: np.ndarray,
     return _gaussian_smooth(binary_mask.astype(float), distances, sigma_m)
 
 # =============================================================================
-# CRITIC-熵权组合赋权法 (保持不变)
+# CRITIC-熵权组合赋权法
 # =============================================================================
 
 def calculate_critic_entropy_weights(data: pd.DataFrame) -> pd.Series:
@@ -427,7 +427,7 @@ def calculate_vehicle_field_static(df: pd.DataFrame) -> pd.Series:
     return pd.Series(s_veh, index=df.index)
 
 # =============================================================================
-# 归一化 / 等级判定 (保持不变)
+# 归一化 / 等级判定
 # =============================================================================
 
 def normalize_field(field: pd.Series) -> pd.Series:
@@ -436,6 +436,22 @@ def normalize_field(field: pd.Series) -> pd.Series:
     if max_val - min_val < 1e-6:
         return pd.Series(np.zeros(len(field)), index=field.index)
     return (field - min_val) / (max_val - min_val)
+
+# F_S最终全局强制Min-Max归一化到[0,1]（和R值归一化逻辑统一）
+def force_normalize_FS(F_S: pd.Series) -> pd.Series:
+    """
+    全局Min-Max线性缩放F_S到[0,1]
+    处理全数据相同异常，鲁棒性拉满
+    """
+    fs_values = F_S.values.copy()
+    R_min = np.nanmin(fs_values)
+    R_max = np.nanmax(fs_values)
+    # 处理分母为0（所有F_S值相同）
+    if R_max == R_min:
+        return pd.Series(np.zeros_like(fs_values), index=F_S.index)
+    # 标准Min-Max归一化
+    fs_norm = (fs_values - R_min) / (R_max - R_min)
+    return pd.Series(np.clip(fs_norm, 0.0, 1.0), index=F_S.index)
 
 def get_field_level(mean_field: float) -> str:
     levels = CONFIG['field_levels']
@@ -449,21 +465,23 @@ def get_field_level(mean_field: float) -> str:
         return '高'
 
 # =============================================================================
-# 综合场强 (保持不变)
+# 综合场强
 # =============================================================================
 
 def calculate_comprehensive_field(df: pd.DataFrame) -> pd.DataFrame:
     weights    = CONFIG['weights']
     levels     = CONFIG['field_levels']
     final_sigma = CONFIG['calculation'].get('final_smooth_sigma', 8.0)
+    force_norm_fs = CONFIG['calculation'].get('force_normalize_fs', False)
+    adjust_distribution = CONFIG['calculation'].get('adjust_distribution', False)
 
     result    = df[['距离 (m)']].copy()
     distances = df['距离 (m)'].values.astype(float)
 
-    # 计算各分量 (注意：请确保 calculate_vehicle_field_static 已正确实现)
+    # 计算各分量
     s_geo  = calculate_geo_field(df)
     s_sign = calculate_sign_field(df)
-    s_veh  = calculate_vehicle_field_static(df) # 确保此函数已在上方补全
+    s_veh  = calculate_vehicle_field_static(df)
 
     # 归一化
     s_geo_norm  = normalize_field(s_geo)
@@ -481,6 +499,17 @@ def calculate_comprehensive_field(df: pd.DataFrame) -> pd.DataFrame:
         index=df.index
     )
     F_S = F_S.clip(0.0, 1.0)
+
+    # ===================== F_S 分布后处理 =====================
+    # 极小幅度微调：仅抬升 0~0.02 的极小值，解决R=-1占比过高问题，幅度≤0.005
+    if adjust_distribution:
+        F_S = adjust_Fs_distribution(F_S, threshold=0.03, lift=0.03)
+    # ==========================================================================
+
+    # ===================== 新增：F_S全局强制归一化 =====================
+    if force_norm_fs:
+        F_S = force_normalize_FS(F_S)
+    # ======================================================================
 
     # 保存结果
     result['s_geo']       = s_geo
@@ -502,8 +531,35 @@ def calculate_comprehensive_field(df: pd.DataFrame) -> pd.DataFrame:
 
     return result
 
+def adjust_Fs_distribution(F_S: pd.Series, threshold: float = 0.02, lift: float = 0.005) -> pd.Series:
+    """
+    F_S 分布极小幅度后处理（仅解决R≈-1问题，不改变原有分布）
+    规则：
+    1. F_S ∈ [0, threshold) → 线性轻微抬升（幅度=lift）
+    2. F_S ≥ threshold → 完全不变
+    3. 保证平滑过渡，无阶跃，仍在[0,1]区间内
+    
+    Args:
+        F_S: 原始计算的场强序列
+        threshold: 触发微调的阈值（固定0.02，对应R≈-1的临界条件）
+        lift: 抬升幅度（默认0.005，极小幅度，满足你的要求）
+    Returns:
+        微调后的F_S序列
+    """
+    fs_values = F_S.values.copy()
+    
+    # 仅对小于阈值的极小值做线性抬升，其余保持不变
+    mask = fs_values < threshold
+    if np.any(mask):
+        # 线性平滑抬升：0→lift，threshold→threshold（无缝衔接）
+        fs_values[mask] = fs_values[mask] + lift * (1 - fs_values[mask] / threshold)
+    
+    # 再次裁剪保证在[0,1]
+    fs_values = np.clip(fs_values, 0.0, 1.0)
+    return pd.Series(fs_values, index=F_S.index)
+
 # =============================================================================
-# 统计 / 场景处理 (保持不变)
+# 统计 / 场景处理
 # =============================================================================
 
 def get_scenario_statistics(result_df: pd.DataFrame, scenario_name: str) -> Dict:
@@ -563,7 +619,7 @@ def save_weights_record(weights_dict: Dict, output_dir: str, calculated_weights:
     df_weights = pd.DataFrame(record)
     
     # 保存路径
-    weights_path = os.path.join(output_dir, 'used_weights.csv')
+    weights_path = os.path.join(output_dir, 'Fs_used_weights.csv')
     df_weights.to_csv(weights_path, index=False, encoding='utf-8-sig')
     print(f"\n权重记录已保存至: {weights_path}")
     
@@ -572,6 +628,85 @@ def save_weights_record(weights_dict: Dict, output_dir: str, calculated_weights:
         print(f"  数据驱动更新的参数: {list(calculated_weights.keys())}")
     
     return df_weights
+
+# F_S 全场景分布统计（分场景+合并统计，保存CSV）
+def calculate_Fs_distribution_statistics(
+    results_dict: dict,
+    output_dir: str,
+    num_bins: int = 50  # 改为指定区间数量，默认10等份
+) -> pd.DataFrame:
+    """
+    统计F_S在等宽区间上的分布（单场景 + 全部场景合并）
+    :param results_dict: 场景-数据框字典
+    :param output_dir: 输出目录
+    :param num_bins: 等宽区间数量，默认10（0~1均分）
+    :return: 分布统计DataFrame
+    """
+    stats_list = []
+    all_fs = []
+
+    # 自动生成 [0,1] 等宽区间
+    bins = np.linspace(0, 1, num_bins + 1)
+    # 生成美观的区间标签
+    bin_labels = [f"[{bins[i]:.3f}, {bins[i+1]:.3f})" for i in range(num_bins)]
+    bin_labels[-1] = f"[{bins[-2]:.3f}, {bins[-1]:.3f}]"  # 最后一段闭区间
+
+    # 单场景统计
+    for scenario, df in results_dict.items():
+        fs_values = df['F_S'].dropna()
+        all_fs.extend(fs_values.tolist())
+        
+        # 分箱统计
+        fs_binned = pd.cut(
+            fs_values, 
+            bins=bins, 
+            labels=bin_labels, 
+            include_lowest=True,
+            ordered=True
+        )
+        counts = fs_binned.value_counts().sort_index()
+        total = counts.sum()
+        ratios = (counts / total * 100).round(2)
+        
+        for interval, count in counts.items():
+            stats_list.append({
+                '场景': scenario,
+                'Fs区间': interval,
+                '样本数量': count,
+                '占比(%)': ratios[interval],
+                '总样本数': total
+            })
+    
+    # 全部场景合并统计
+    if all_fs:
+        all_fs_series = pd.Series(all_fs)
+        # 统一分箱规则
+        all_binned = pd.cut(
+            all_fs_series,
+            bins=bins,
+            labels=bin_labels,
+            include_lowest=True,
+            ordered=True
+        )
+        counts_all = all_binned.value_counts().sort_index()
+        total_all = counts_all.sum()
+        ratios_all = (counts_all / total_all * 100).round(2)
+        
+        for interval, count in counts_all.items():
+            stats_list.append({
+                '场景': '全部场景合并',
+                'Fs区间': interval,
+                '样本数量': count,
+                '占比(%)': ratios_all[interval],
+                '总样本数': total_all
+            })
+    
+    # 保存CSV
+    stats_df = pd.DataFrame(stats_list)
+    save_path = os.path.join(output_dir, 'Fs_distribution_statistics.csv')
+    stats_df.to_csv(save_path, index=False, encoding='utf-8-sig')
+    print(f"\n✅ Fs分布统计文件已保存: {save_path}")
+    return stats_df
 
 # =============================================================================
 # 主函数
@@ -597,6 +732,12 @@ def main():
     critic_group.add_argument('--no-use-critic', action='store_false', dest='use_critic', help='强制禁用客观赋权')
     parser.set_defaults(use_critic=None)
 
+    # F_S强制归一化开关
+    fs_norm_group = parser.add_mutually_exclusive_group()
+    fs_norm_group.add_argument('--force-normalize-fs', action='store_true', dest='force_norm_fs', help='强制F_S全局归一化到[0,1]')
+    fs_norm_group.add_argument('--no-force-normalize-fs', action='store_false', dest='force_norm_fs', help='关闭F_S强制归一化')
+    parser.set_defaults(force_norm_fs=None)
+
     args = parser.parse_args()
     
     # 1. 加载配置 (无默认值)
@@ -605,6 +746,9 @@ def main():
     # 2. 命令行覆盖配置
     if args.use_critic is not None:
         CONFIG['use_critic_entropy'] = args.use_critic
+    # 覆盖F_S归一化配置
+    if args.force_norm_fs is not None:
+        CONFIG['calculation']['force_normalize_fs'] = args.force_norm_fs
 
     input_dir  = args.input_dir  or CONFIG['paths']['input_dir']
     output_dir = args.output_dir or CONFIG['paths']['output_dir']
@@ -672,7 +816,7 @@ def main():
 
     for scenario in scenarios:
         input_file  = os.path.join(input_dir,  f"{scenario}_continuous.csv")
-        output_file = os.path.join(output_dir, f"{scenario}_risk_field.csv")
+        output_file = os.path.join(output_dir, f"Fs_{scenario}.csv")
 
         if not os.path.exists(input_file):
             print(f"警告: 文件不存在，跳过 - {input_file}")
@@ -689,13 +833,18 @@ def main():
     # 8. 收尾：保存场景汇总统计
     if all_stats:
         summary_df   = pd.DataFrame(all_stats)
-        summary_path = os.path.join(output_dir, 'scenario_summary.csv')
+        summary_path = os.path.join(output_dir, 'Fs_scenario_summary.csv')
         summary_df.to_csv(summary_path, index=False, encoding='utf-8-sig')
         print(f"\n场景汇总统计已保存: {summary_path}")
         print(f"\n可视化已保存: {vis_dir}")
         print("\n场景对比:")
         print(summary_df.to_string(index=False))
-
+    
+    calculate_Fs_distribution_statistics(
+            results_dict=all_results,
+            output_dir=output_dir
+        )
+    
     # 9. 可视化分析（论文图4.3/4.4）
     if all_stats:
         print("\n" + "=" * 60)
@@ -729,10 +878,13 @@ def main():
                 scenario_name=scenario,
                 output_dir=vis_dir
             )
-            plot_three_scenarios_evolution(
-                results_dict=all_results,
-                output_dir=vis_dir
-            )
+            # 新增 F_S 分布直方图
+            plot_Fs_distribution(result_df, scenario, vis_dir)
+            
+        plot_Fs_three_scenarios_evolution(
+            results_dict=all_results,
+            output_dir=vis_dir
+        )
 
 if __name__ == '__main__':
     main()

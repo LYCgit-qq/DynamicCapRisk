@@ -1,24 +1,25 @@
-# ============================================================
-# risk_evaluator.yaml  —  风险度评估模块配置文件
-# ============================================================
+# D:\Local\DynamicCapRisk\config\risk_evaluator.yaml
 
-# ── 模型参数（来自论文校准结果） ──────────────────────────────
+# ── 模型参数 ──────────────────────────────
 model:
-  ad_min:       0.43    # A_d 样本最小值（归一化下界）
-  ad_max:       1.08    # A_d 样本最大值（归一化上界）
-  alpha:        0.58    # F_S 权重
-  beta:         0.42    # Ã_d 权重
-  # R* = 2R - 0.16，理论范围 [-1, 1]
+  # 计算方法选择 tci=论文相对失配比 | linear=原线性加权
+  method:       tci     # 可选 tci / linear
+  ad_min:       0.43    # 仅 linear 方法使用
+  ad_max:       1.08    # 仅 linear 方法使用
+  alpha:        0.58    # 仅 linear 方法使用
+  beta:         0.42    # 仅 linear 方法使用
+  # R = 2R - 0.16
   thresh_high:  0.10    # 高风险阈值 θ
   thresh_low:  -0.10    # 低风险阈值 -θ
   fs_baseline:  0.10    # label=0 自由路段基线场强
+  force_normalize_r: true  # 是否强制R归一化到[0,1]
 
 # ── 场景标签映射 ──────────────────────────────────────────────
 scenarios:
   label_csv_map:
-    1: 'work_zone_1_risk_field.csv'
-    2: 'work_zone_2_risk_field.csv'
-    3: 'work_zone_3_risk_field.csv'
+    1: 'Fs_work_zone_1.csv'
+    2: 'Fs_work_zone_2.csv'
+    3: 'Fs_work_zone_3.csv'
   label_name:
     0: '基线场景'
     1: '施工区1'
@@ -32,6 +33,7 @@ paths:
   fs_dir: "output/2_risk_assessment/results"  
   output_csv: "output/2_risk_assessment/results"
   output_fig: "output/2_risk_assessment/figures"
+  performance_csv: "output/1_capability_assessment/validation/performance_metrics.csv"
 
 # ── 可视化样式 ────────────────────────────────────────────────
 vis:

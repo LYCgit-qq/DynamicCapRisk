@@ -654,7 +654,7 @@ def main():
 
     for scenario in valid_scenarios:
         input_file = os.path.join(input_dir, f"{scenario}_continuous.csv")
-        output_file = os.path.join(output_dir, f"{scenario}_risk_field.csv")
+        output_file = os.path.join(output_dir, f"Fs_{scenario}.csv")
         try:
             result_df, stats = process_scenario(input_file, output_file, scenario)
             all_stats.append(stats)
@@ -665,7 +665,7 @@ def main():
     # ── 汇总统计 ──────────────────────────────────────────────────────
     if all_stats:
         summary_df = pd.DataFrame(all_stats)
-        summary_path = os.path.join(output_dir, "scenario_summary.csv")
+        summary_path = os.path.join(output_dir, "Fs_scenario_summary.csv")
         summary_df.to_csv(summary_path, index=False, encoding="utf-8-sig")
 
         print(f"\n{'='*60}")

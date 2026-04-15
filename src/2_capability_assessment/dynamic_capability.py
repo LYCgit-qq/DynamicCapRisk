@@ -176,26 +176,6 @@ def calculate_dynamic_capability(
     ad_min      = calc_params.get("ad_output_min", 0.00)
     ad_max      = calc_params.get("ad_output_max", 1.00)
 
-    # ── 3.1 逐实验计算原始 Ad ──────────────────────────────────────
-    # 拼接所有实验的 Ab 和 Afl 样本，用于客观赋权
-    all_ab_for_weight = []
-    all_afl_for_weight = []
-    for exp_id in range(len(sample_afl)):
-        ab_val = exp_ab_map.get(exp_id, 0.70)
-        afl_arr = np.array(sample_afl[exp_id], dtype=np.float64)
-        afl_arr = afl_arr[np.isfinite(afl_arr)]
-        if len(afl_arr) == 0:
-            continue
-        # 基准能力为固定值，重复匹配波动量样本长度
-        all_ab_for_weight.extend([ab_val] * len(afl_arr))
-        all_afl_for_weight.extend(afl_arr.tolist())
-
-    # 调用函数计算组合权重
-    w_ab, w_afl = compute_critic_entropy_weight(
-        np.array(all_ab_for_weight),
-        np.array(all_afl_for_weight)
-    )
-
     # ── 3.1 确定权重 (Fixed 或 Objective) + 逐实验计算 Ad──────────────────────────────
     # 确定权重
     weight_mode = calc_params.get("weight_mode", "fixed")
@@ -402,6 +382,51 @@ def save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stat
 
     print(f"\n💾 结果已保存至：{out}")
 
+# ====================== 6. Ad等区间分布统计 ======================
+def stat_ad_interval_distribution(all_dynamic_cap, config, num_bins=50):
+    """
+    独立函数：统计动态驾驶能力Ad在等区间上的分布
+    :param all_dynamic_cap: 全局标准化后的Ad数组
+    :param config: 配置字典
+    :param num_bins: 等区间数量，默认10个
+    :return: 分布统计DataFrame
+    """
+    # 读取配置参数
+    calc_params = config["calculation"]
+    ad_min = calc_params.get("ad_output_min", 0.00)
+    ad_max = calc_params.get("ad_output_max", 1.00)
+    ab_mode = config["calculation"].get("ab_mode", "Ab")
+    output_dir = config["full_paths"]["output_dir"]
+    prefix = f"Ad_{ab_mode}"
+
+    # 生成等宽区间
+    bins = np.linspace(ad_min, ad_max, num_bins + 1)
+    # 设置区间标签
+    bin_labels = [f"[{bins[i]:.3f}, {bins[i+1]:.3f})" for i in range(num_bins)]
+    bin_labels[-1] = f"[{bins[-2]:.3f}, {bins[-1]:.3f}]"  # 最后一段闭区间
+
+    # 统计分布
+    ad_series = pd.Series(all_dynamic_cap)
+    ad_binned = pd.cut(ad_series, bins=bins, labels=bin_labels, include_lowest=True)
+    # 构建统计结果
+    dist_stats = ad_binned.value_counts().sort_index().reset_index()
+    dist_stats.columns = ["Ad等区间", "样本数量"]
+    # 计算占比和累计占比
+    total = len(all_dynamic_cap)
+    dist_stats["占比(%)"] = (dist_stats["样本数量"] / total * 100).round(2)
+    dist_stats["累计占比(%)"] = dist_stats["占比(%)"].cumsum().round(2)
+
+    # 保存CSV文件
+    csv_path = os.path.join(output_dir, f"{prefix}_interval_distribution.csv")
+    dist_stats.to_csv(csv_path, index=False, encoding="utf-8-sig")
+
+    # 控制台打印结果
+    print(f"\n📊 Ad等区间分布统计（{num_bins}个等区间）")
+    print(dist_stats.to_string(index=False))
+    print(f"✅ 区间分布文件已保存：{csv_path}")
+
+    return dist_stats
+
 # ====================== CRITIC+熵权法 组合权重计算 ======================
 def compute_critic_entropy_weight(ab_samples, afl_samples):
     """
@@ -489,5 +514,8 @@ if __name__ == "__main__":
     visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, viz_config)
     save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df,
                 group_stats, validate_dict, config)
+    
+    # 调用新增函数：统计Ad等区间分布
+    stat_ad_interval_distribution(all_dynamic_cap, config)
     
     print("\n===== 动态驾驶能力计算完成 =====")

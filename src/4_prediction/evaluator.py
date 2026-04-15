@@ -270,7 +270,7 @@ def build_report(
         f"  R²             = {r_r2:.4f}",
         f"  MAE            = {r_mae_:.4f}",
         f"  RMSE           = {r_rmse_:.4f}",
-        f"  高风险召回率   = {hr_recall*100:.1f}%  （阈值 R*>{ec['risk_thresh_high']}）",
+        f"  高风险召回率   = {hr_recall*100:.1f}%  （阈值 R>{ec['risk_thresh_high']}）",
         f"  高风险精确率   = {hr_prec*100:.1f}%",
         f"  高风险 F1      = {hr_f1_val:.4f}", "",
         "【三】风险等级分类",

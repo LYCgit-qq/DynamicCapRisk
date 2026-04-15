@@ -13,8 +13,8 @@ paths:
 eval:
   batch_size:       256     # 推理批次大小
   split:            "test"  # 评估集：train / val / test
-  risk_thresh_high:  0.1    # 高风险阈值（R* > 0.1）
-  risk_thresh_low:  -0.1    # 低风险阈值（R* < -0.1）
+  risk_thresh_high:  0.1    # 高风险阈值（R > 0.1）
+  risk_thresh_low:  -0.1    # 低风险阈值（R < -0.1）
 
 # -------------------------- 分类标签 --------------------------
 class_names: ["低风险", "中风险", "高风险"]

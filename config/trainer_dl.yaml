@@ -99,6 +99,6 @@ loss:
   huber_delta: 0.05
   cls_weights: [1.0, 1.5, 2.0]
 
-  # TCI 一致性公式系数：R* = alpha·F_S - beta·(2·Ã_d - 1)（论文§5.2.2）
+  # TCI 一致性公式系数：R = alpha·F_S - beta·(2·Ã_d - 1)（论文§5.2.2）
   tci_alpha: 0.58
   tci_beta:  0.42

@@ -19,7 +19,7 @@
 | 3    | 占而不还       | work_zone_3   |
 
 - test0 区域的 F_S 统一记为 0
-- work_zone_1–work_zone_3 区域的 F_S 计算结果见 `output/2_risk_assessment/work_zone_1_risk_field.csv` ~ `work_zone_3_risk_field.csv`
+- work_zone_1–work_zone_3 区域的 F_S 计算结果见 `output/2_risk_assessment/Fs_work_zone_1.csv` ~ `Fs_work_zone_3.csv`
 
 ## 3. 数据结构与读取示例
 ### 3.1 读取数据

@@ -138,7 +138,7 @@ def load_risk(csv_path: str) -> pd.DataFrame:
         raise ValueError(f"risk_windows_all.csv 缺少列: {missing}")
     print(
         f"  风险评估加载：{len(df)} 行，"
-        f"R* ∈ [{df['R_star'].min():.3f}, {df['R_star'].max():.3f}]"
+        f"R ∈ [{df['R_star'].min():.3f}, {df['R_star'].max():.3f}]"
     )
     return df
 
@@ -339,7 +339,7 @@ def build_sequences(
     Returns:
         X          : (N, seq_len, 17)   float32   历史输入
         y_ability  : (N,)               float32   未来步 Ã_d
-        y_risk_reg : (N,)               float32   未来步 R*
+        y_risk_reg : (N,)               float32   未来步 R
         y_risk_cls : (N,)               int64     未来步风险等级
         meta_df    : (N, 3)             sample_idx / window_idx(目标步) / field_label(目标步)
     """

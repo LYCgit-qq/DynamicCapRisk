@@ -7,7 +7,7 @@ plot_risk_results.py
 同时包含风险验证模块（risk_validator.py）的可视化函数：
   - plot_roc_curve          ROC 曲线（原 validate_roc 内嵌绘图）
   - plot_risk_event_rate    风险等级 × 事件发生率柱状图（原 validate_risk_level_event_rate 内嵌绘图）
-  - plot_r_star_boxplot     R* 事件/无事件分布箱线图（原 plot_r_star_by_event 内嵌绘图）
+  - plot_r_boxplot     R 事件/无事件分布箱线图
 
 所有函数签名统一：
     plot_xxx(data, cfg, fig_dir)
@@ -143,7 +143,7 @@ def plot_radar_chart(
     scenarios: List[str],
     data: Dict[str, Dict],
     output_dir: str,
-    save_name: str = "risk_field_radar_chart.png"
+    save_name: str = "Fs_radar_chart.png"
 ):
     """
     绘制雷达图（论文图4.3）
@@ -206,7 +206,7 @@ def plot_stacked_bar(
     w_geo: float = 0.25,
     w_sign: float = 0.22,
     w_veh: float = 0.53,
-    save_name: str = "risk_field_stacked_bar.png"
+    save_name: str = "Fs_stacked_bar.png"
 ):
     """
     绘制堆叠柱状图
@@ -302,12 +302,12 @@ def plot_field_evolution(
         df: 风险场强结果DataFrame
         scenario_name: 场景名称
         output_dir: 输出目录
-        save_name: 保存文件名（默认为 {scenario_name}_evolution.png）
+        save_name: 保存文件名（默认为 Fs_{scenario_name}_evolution.png）
     """
     set_paper_style()
 
     if save_name is None:
-        save_name = f"{scenario_name}_evolution.png"
+        save_name = f"Fs_{scenario_name}_evolution.png"
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8),
                                    sharex=True, height_ratios=[2, 1])
@@ -323,7 +323,7 @@ def plot_field_evolution(
             color=RISK_COLORS['车辆交互'])
 
     ax1.set_ylabel('归一化场强', fontsize=14, weight='bold')
-    ax1.set_ylim(0, 1.05)
+    ax1.set_ylim(-0.05, 1.05)
     ax1.grid(True, linestyle='--', alpha=GRID_ALPHA)
     ax1.legend(loc='upper right', fontsize=11, framealpha=0.9)
     ax1.set_title(f"{scenario_name} 风险场强沿距离演化",
@@ -342,7 +342,7 @@ def plot_field_evolution(
 
     ax2.set_xlabel('距离 (m)', fontsize=14, weight='bold')
     ax2.set_ylabel('综合场强 $F_S$', fontsize=14, weight='bold')
-    ax2.set_ylim(0, 1.05)
+    ax2.set_ylim(-0.05, 1.05)
     ax2.grid(True, linestyle='--', alpha=GRID_ALPHA)
     ax2.legend(loc='upper right', fontsize=10, ncol=5, framealpha=0.9)
     sns.despine(ax=ax2)
@@ -352,10 +352,10 @@ def plot_field_evolution(
     _save_and_close(fig, save_path, "演化曲线")
 
 
-def plot_three_scenarios_evolution(
+def plot_Fs_three_scenarios_evolution(
     results_dict: Dict[str, pd.DataFrame],
     output_dir: str,
-    save_name: str = "three_scenarios_evolution.png",
+    save_name: str = "Fs_three_scenarios_evolution.png",
     sigma: float = 6.0  # 核心：大幅增强平滑力度，从2.0→6.0
 ):
     """
@@ -423,6 +423,57 @@ def plot_three_scenarios_evolution(
     save_path = os.path.join(output_dir, save_name)
     _save_and_close(fig, save_path, "三场景场强演化曲线")
 
+
+def plot_Fs_distribution(df: pd.DataFrame, scenario_name: str, output_dir: str):
+    """
+    绘制综合风险场强 F_S 的数值分布直方图 + KDE 核密度曲线
+    统一遵循论文绘图风格：配色、字体、边框、保存逻辑
+    """
+    # 调用全局统一绘图风格
+    set_paper_style()
+    
+    # 提取数据并计算统计量
+    fs_vals = df['F_S'].dropna()
+    mean_fs = fs_vals.mean()
+    median_fs = fs_vals.median()
+
+    # 创建画布（统一尺寸）
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # 绘制直方图+核密度曲线（使用统一的综合场强配色）
+    sns.histplot(
+        fs_vals, bins=30, kde=True, 
+        color=RISK_COLORS['综合场强'],  # 统一配色：综合场强红
+        alpha=0.6, edgecolor='white',  # 统一边缘白色
+        ax=ax
+    )
+
+    # 标注统计量（统一线型、颜色、线宽）
+    ax.axvline(
+        mean_fs, color='black', linestyle='-', 
+        linewidth=1.5, label=f'均值 = {mean_fs:.3f}'
+    )
+    ax.axvline(
+        median_fs, color=SECONDARY_COLOR, linestyle='--', 
+        linewidth=1.5, label=f'中位数 = {median_fs:.3f}'
+    )
+
+    # 统一坐标轴、标题样式（加粗、字号对齐）
+    ax.set_title(f'{scenario_name} 综合风险场强 $F_S$ 分布', 
+                 fontsize=15, pad=10, weight='bold')
+    ax.set_xlabel('综合风险场强 $F_S$', fontsize=14, weight='bold')
+    ax.set_ylabel('频次 / 概率密度', fontsize=14, weight='bold')
+    
+    # 统一范围、网格、边框
+    ax.set_xlim(0, 1)
+    ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
+    _apply_spine(ax)  # 统一边框样式
+    ax.legend(fontsize=11, framealpha=0.9)
+
+    # 统一保存逻辑（替换原生plt.savefig）
+    save_path = os.path.join(output_dir, f'Fs_distribution_{scenario_name}.png')
+    _save_and_close(fig, save_path, "F_S分布直方图")
+    
 # =============================================================================
 # Figure 4.5  阈值敏感性 F1 曲线
 # =============================================================================
@@ -430,20 +481,21 @@ def plot_three_scenarios_evolution(
 def plot_threshold_f1(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
     """
     Figure 4.5：遍历阈值 θ，计算各阈值下高风险识别 F1，标注最优点。
-    若无真实事件标签（event_label 列），以 R*>0 作为代理标签。
+    若无真实事件标签（event_label 列），以 R>0 作为代理标签。
+    适配 R∈[0,1] 范围
     """
     from sklearn.metrics import f1_score
     set_paper_style()
 
     ts_cfg = cfg['threshold_search']
-    lo, hi, step = ts_cfg['range'][0], ts_cfg['range'][1], ts_cfg['step']
-    thresholds   = np.arange(lo, hi + step / 2, step)
+    lo, hi, step = 0.0, 1.0, 0.05
 
     y      = (all_windows['event_label'].to_numpy(dtype=int)
               if 'event_label' in all_windows.columns
-              else (all_windows['R_star'] > 0).astype(int).to_numpy())
-    r_star = all_windows['R_star'].to_numpy()
-    f1s    = [f1_score(y, (r_star >= t).astype(int), zero_division=0)
+              else (all_windows['R'] > 0).astype(int).to_numpy())
+    r = all_windows['R'].to_numpy()
+    thresholds   = np.arange(lo, hi + step / 2, step)
+    f1s    = [f1_score(y, (r >= t).astype(int), zero_division=0)
               for t in thresholds]
 
     best_i = int(np.argmax(f1s))
@@ -460,53 +512,52 @@ def plot_threshold_f1(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> Non
     ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'fig4_5_threshold_f1.png'), cfg['vis']['dpi'])
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_threshold_f1.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
-# Figure 4.6  R* 整体分布直方图
+# Figure 4.6  R 整体分布直方图
 # =============================================================================
 
-def plot_r_histogram(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
-    """Figure 4.6：全体样本 R* 分布直方图，标注均值与高/低风险阈值。"""
+def plot_r_histogram(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple) -> None:
+    """Figure 4.6：全体样本 R 分布直方图，标注均值与最优风险阈值。"""
     set_paper_style()
 
-    r   = all_windows['R_star'].to_numpy()
-    thi = cfg['model']['thresh_high']
-    tlo = cfg['model']['thresh_low']
+    r   = all_windows['R'].to_numpy()
+    theta_low, theta_high = best_theta
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.hist(r, bins=60, color=PRIMARY_COLOR, edgecolor='white', alpha=0.85, density=True)
-    ax.axvline(thi,      color='red',            linestyle='--', linewidth=1.2,
-               label=f'高风险阈值 {thi}')
-    ax.axvline(tlo,      color=SECONDARY_COLOR,  linestyle='--', linewidth=1.2,
-               label=f'低风险阈值 {tlo}')
+    ax.axvline(theta_high,      color='red',            linestyle='--', linewidth=1.2,
+               label=f'高风险阈值 {theta_high}')
+    ax.axvline(theta_low,      color=SECONDARY_COLOR,  linestyle='--', linewidth=1.2,
+               label=f'低风险阈值 {theta_low}')
     ax.axvline(r.mean(), color='black',           linestyle='-',  linewidth=1.2,
                label=f'均值 {r.mean():.3f}')
-    ax.set_xlabel('风险度 R*')
+    ax.set_xlabel('风险度 R')
     ax.set_ylabel('概率密度')
-    ax.set_title('图4.6  全体样本风险度 R* 分布直方图')
+    ax.set_xlim(-0.05, 1.05)
+    ax.set_title('图4.6  全体样本风险度 R 分布直方图')
     ax.legend()
     ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'fig4_6_r_histogram.png'), cfg['vis']['dpi'])
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_r_histogram.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
-# Figure 4.7  三组驾驶人 R* 小提琴图
+# Figure 4.7  三组驾驶人 R 小提琴图
 # =============================================================================
 
-def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
-    """Figure 4.7：三组驾驶人 R* 小提琴图，各组着不同色。"""
+def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple) -> None:
+    """Figure 4.7：三组驾驶人 R 小提琴图，各组着不同色。"""
     set_paper_style()
 
     groups = ['高能力组', '中能力组', '低能力组']
     gc     = cfg['vis']['group_colors']
-    thi    = cfg['model']['thresh_high']
-    tlo    = cfg['model']['thresh_low']
+    theta_low, theta_high = best_theta
 
-    data = [all_windows[all_windows['group'] == g]['R_star'].to_numpy()
+    data = [all_windows[all_windows['group'] == g]['R'].to_numpy()
             for g in groups]
 
     fig, ax = plt.subplots(figsize=(8, 5.5))
@@ -519,16 +570,17 @@ def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> 
         parts[comp].set_color('black')
         parts[comp].set_linewidth(1.2)
 
-    ax.axhline(thi, color='red',           linestyle='--', linewidth=1, alpha=0.7)
-    ax.axhline(tlo, color=SECONDARY_COLOR, linestyle='--', linewidth=1, alpha=0.7)
+    ax.axhline(theta_high, color='red',           linestyle='--', linewidth=1, alpha=0.7)
+    ax.axhline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1, alpha=0.7)
     ax.set_xticks([1, 2, 3])
     ax.set_xticklabels(groups)
-    ax.set_ylabel('风险度 R*')
+    ax.set_ylabel('风险度 R')
+    ax.set_ylim(-0.05, 1.05)
     ax.set_title('图4.7  三组驾驶人风险度分布小提琴图')
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'fig4_7_violin_by_group.png'), cfg['vis']['dpi'])
+    _savefig(fig, os.path.join(fig_dir, 'Fs_violin_by_group.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
@@ -537,15 +589,13 @@ def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> 
 
 def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
     """
-    Figure 4.8：三组驾驶人在四个场景下 R* 均值折线图。
+    Figure 4.8：三组驾驶人在四个场景下 R 均值折线图。
     table_df 由 compute_scenario_group_table() 返回。
     """
     set_paper_style()
 
     groups = ['高能力组', '中能力组', '低能力组']
     gc     = cfg['vis']['group_colors']
-    thi    = cfg['model']['thresh_high']
-    tlo    = cfg['model']['thresh_low']
     scenes = table_df['场景'].tolist()
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -555,17 +605,15 @@ def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) ->
         ax.plot(scenes, table_df[g].tolist(), 'o-',
                 color=gc[g], linewidth=LINE_WIDTH, markersize=7, label=g)
 
-    ax.axhline(thi, color='red',           linestyle='--', linewidth=1, alpha=0.6)
-    ax.axhline(tlo, color=SECONDARY_COLOR, linestyle='--', linewidth=1, alpha=0.6)
-    ax.axhline(0,   color='gray',          linestyle=':',  linewidth=0.8)
+    ax.set_ylim(-0.05, 1.05)
     ax.set_xlabel('场景')
-    ax.set_ylabel('风险度 R* 均值')
+    ax.set_ylabel('风险度 R 均值')
     ax.set_title('图4.8  三组驾驶人在四个场景下风险度均值变化折线图')
     ax.legend()
     ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'fig4_8_line_scenario_group.png'), cfg['vis']['dpi'])
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_line_scenario_group.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
@@ -573,13 +621,11 @@ def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) ->
 # =============================================================================
 
 def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
-    """Figure 4.9：三组驾驶人在四个场景下 R* 分组箱线图。"""
+    """Figure 4.9：三组驾驶人在四个场景下 R 分组箱线图。"""
     set_paper_style()
 
     groups  = ['高能力组', '中能力组', '低能力组']
     gc      = cfg['vis']['group_colors']
-    thi     = cfg['model']['thresh_high']
-    tlo     = cfg['model']['thresh_low']
     lname   = {int(k): v for k, v in cfg['scenarios']['label_name'].items()}
     labels  = sorted(all_windows['field_label'].unique())
     scenes  = [lname.get(l, str(l)) for l in labels]
@@ -590,7 +636,7 @@ def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) 
     for gi, g in enumerate(groups):
         offset = (gi - 1) * width
         data   = [all_windows[(all_windows['field_label'] == lbl) &
-                               (all_windows['group'] == g)]['R_star'].to_numpy()
+                               (all_windows['group'] == g)]['R'].to_numpy()
                   for lbl in labels]
         bp = ax.boxplot(data, positions=x + offset, widths=width * 0.85,
                         patch_artist=True,
@@ -603,18 +649,17 @@ def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) 
             patch.set_facecolor(gc[g])
             patch.set_alpha(0.65)
 
-    ax.axhline(thi, color='red',           linestyle='--', linewidth=1, alpha=0.6)
-    ax.axhline(tlo, color=SECONDARY_COLOR, linestyle='--', linewidth=1, alpha=0.6)
+    ax.set_ylim(-0.05, 1.05)
     ax.set_xticks(x)
     ax.set_xticklabels(scenes)
-    ax.set_ylabel('风险度 R*')
+    ax.set_ylabel('风险度 R')
     ax.set_title('图4.9  三组驾驶人在四个场景下风险度分布箱线图')
     handles = [mpatches.Patch(facecolor=gc[g], alpha=0.7, label=g) for g in groups]
     ax.legend(handles=handles)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'fig4_9_box_scenario_group.png'), cfg['vis']['dpi'])
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_box_scenario_group.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
@@ -634,7 +679,7 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
         sub   = all_windows[all_windows['group'] == g]
         total = max(len(sub), 1)
         for lvl in levels:
-            pcts[g].append((sub['risk_level'] == lvl).sum() / total * 100)
+            pcts[g].append((sub['risk_level_optimized'] == lvl).sum() / total * 100)
 
     x       = np.arange(len(groups))
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -661,7 +706,7 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'fig4_10_stacked_bar.png'), cfg['vis']['dpi'])
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_stacked_bar.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
@@ -674,10 +719,11 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
                              fs_temporal_list: List[np.ndarray],
                              cap_groups: Dict[int, str],
                              cfg: dict,
-                             fig_dir: str) -> None:
+                             fig_dir: str,
+                             best_theta: tuple) -> None:
     """
-    Figure 4.11：高/低能力组各取一名代表（R* 均值最接近组均值的样本），
-    双行子图展示全程 R* 时序 + 场景背景色块 + 阈值线。
+    Figure 4.11：高/低能力组各取一名代表（R 均值最接近组均值的样本），
+    双行子图展示全程 R 时序 + 场景背景色块 + 阈值线。
 
     Args:
         sample_ad_norm:    各样本归一化后的 Ã_d 数组列表
@@ -686,16 +732,15 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
     set_paper_style()
 
     gc    = cfg['vis']['group_colors']
-    thi   = cfg['model']['thresh_high']
-    tlo   = cfg['model']['thresh_low']
+    theta_low, theta_high = best_theta
     lname = {int(k): v for k, v in cfg['scenarios']['label_name'].items()}
 
     def _pick_rep(group_name: str) -> int:
         idxs = [i for i, g in cap_groups.items() if g == group_name]
         if not idxs:
             return list(cap_groups.keys())[0]
-        g_mean  = all_windows[all_windows['group'] == group_name]['R_star'].mean()
-        s_means = {i: all_windows[all_windows['sample_idx'] == i]['R_star'].mean()
+        g_mean  = all_windows[all_windows['group'] == group_name]['R'].mean()
+        s_means = {i: all_windows[all_windows['sample_idx'] == i]['R'].mean()
                    for i in idxs
                    if len(all_windows[all_windows['sample_idx'] == i]) > 0}
         return min(s_means, key=lambda i: abs(s_means[i] - g_mean))
@@ -709,22 +754,21 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
     for row_idx, (title, sidx) in enumerate(reps):
         ax     = axes[row_idx]
         fld    = np.asarray(sample_field[sidx])
-        r_star = all_windows[all_windows['sample_idx'] == sidx]['R_star'].to_numpy()
-        x      = np.arange(len(r_star))
+        r = all_windows[all_windows['sample_idx'] == sidx]['R'].to_numpy()
+        x      = np.arange(len(r))
 
-        _fill_scene_bg(ax, fld[:len(r_star)], cfg)
-        ax.plot(x, r_star,
+        _fill_scene_bg(ax, fld[:len(r)], cfg)
+        ax.plot(x, r,
                 color=gc.get(cap_groups.get(sidx, '中能力组'), '#666666'),
-                linewidth=LINE_WIDTH, label='R*')
-        ax.axhline(thi, color='red',           linestyle='--', linewidth=1.0, alpha=0.8,
-                   label=f'高风险 {thi}')
-        ax.axhline(tlo, color=SECONDARY_COLOR, linestyle='--', linewidth=1.0, alpha=0.8,
-                   label=f'低风险 {tlo}')
-        ax.fill_between(x,  thi,  1.0, alpha=0.06, color='red')
-        ax.fill_between(x, -1.0,  tlo, alpha=0.06, color=ACCENT_COLOR)
-        ax.set_ylim(-1.1, 1.1)
-        ax.set_ylabel('R*')
-        ax.set_title(f'{title}（样本 {sidx}，R* 均值={r_star.mean():.3f}）')
+                linewidth=LINE_WIDTH, label='R')
+        ax.axhline(theta_high, color='red',           linestyle='--', linewidth=1.0, alpha=0.8,
+                   label=f'高风险 {theta_high}')
+        ax.axhline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1.0, alpha=0.8,
+                   label=f'低风险 {theta_low}')
+        ax.fill_between(x,  theta_high,  1.0, alpha=0.06, color='red')
+        ax.set_ylim(-0.05, 1.05)
+        ax.set_ylabel('R')
+        ax.set_title(f'{title}（样本 {sidx}，R 均值={r.mean():.3f}）')
         ax.legend(loc='upper right', fontsize=8)
         ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
         _apply_spine(ax)
@@ -742,7 +786,7 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
                    fontsize=9, bbox_to_anchor=(0.5, -0.02))
 
     plt.tight_layout(rect=[0, 0.05, 1, 1])
-    _savefig(fig, os.path.join(fig_dir, 'fig4_11_timeseries_typical.png'),
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_timeseries_typical.png'),
              cfg['vis']['dpi'])
 
 
@@ -756,9 +800,10 @@ def plot_single_sample(sample_idx: int,
                         ad_norm_list: List[np.ndarray],
                         all_windows: pd.DataFrame,
                         cfg: dict,
-                        fig_dir: str) -> None:
+                        fig_dir: str,
+                        best_theta: tuple) -> None:
     """
-    单个样本全程 F_S / Ã_d / R* 三子图时序可视化。
+    单个样本全程 F_S / Ã_d / R 三子图时序可视化。
 
     Args:
         fs_temporal_list: 各样本空间→时间映射后的 F_S 列表
@@ -766,14 +811,13 @@ def plot_single_sample(sample_idx: int,
     """
     set_paper_style()
 
-    thi  = cfg['model']['thresh_high']
-    tlo  = cfg['model']['thresh_low']
+    theta_low, theta_high = best_theta
     fsbl = cfg['model']['fs_baseline']
 
     fld    = np.asarray(sample_field[sample_idx])
     fs_arr = fs_temporal_list[sample_idx]
     adn    = ad_norm_list[sample_idx]
-    r_star = all_windows[all_windows['sample_idx'] == sample_idx]['R_star'].to_numpy()
+    r = all_windows[all_windows['sample_idx'] == sample_idx]['R'].to_numpy()
     x      = np.arange(len(fld))
 
     fig, axes = plt.subplots(3, 1, figsize=(14, 9), sharex=True)
@@ -801,16 +845,15 @@ def plot_single_sample(sample_idx: int,
 
     ax = axes[2]
     _fill_scene_bg(ax, fld, cfg)
-    ax.plot(x, r_star, color=SECONDARY_COLOR, linewidth=LINE_WIDTH, label='R*（风险度）')
-    ax.axhline(thi, color='red',           linestyle='--', linewidth=1.0,
-               label=f'高风险 {thi}')
-    ax.axhline(tlo, color=SECONDARY_COLOR, linestyle='--', linewidth=1.0,
-               label=f'低风险 {tlo}')
-    ax.fill_between(x,  thi,  1.0,  alpha=0.08, color='red')
-    ax.fill_between(x, -1.0,  tlo,  alpha=0.08, color=ACCENT_COLOR)
-    ax.set_ylabel('R*（风险度）')
+    ax.plot(x, r, color=SECONDARY_COLOR, linewidth=LINE_WIDTH, label='R（风险度）')
+    ax.axhline(theta_high, color='red',           linestyle='--', linewidth=1.0,
+               label=f'高风险 {theta_high}')
+    ax.axhline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1.0,
+               label=f'低风险 {theta_low}')
+    ax.fill_between(x,  theta_high,  1.0,  alpha=0.08, color='red')
+    ax.set_ylabel('R（风险度）')
     ax.set_xlabel('窗口序号')
-    ax.set_ylim(-1.1, 1.1)
+    ax.set_ylim(-0.05, 1.05)
     ax.legend(loc='upper right', fontsize=8)
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
@@ -827,6 +870,117 @@ def plot_single_sample(sample_idx: int,
     plt.tight_layout(rect=[0, 0.04, 1, 1])
     _savefig(fig, os.path.join(fig_dir, f'sample_{sample_idx:03d}_timeseries.png'),
              cfg['vis']['dpi'])
+
+
+def _smooth_and_resample(arr: np.ndarray,
+                          window: int = 15,
+                          poly: int = 3,
+                          factor: int = 10) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    先 Savitzky-Golay 平滑，再三次样条插值升采样。
+
+    Returns
+    -------
+    t_dense : 升采样后的 x 轴坐标
+    y_dense : 升采样后的 y 值
+    """
+    n = len(arr)
+    w = window if window % 2 == 1 else window + 1
+    y_sg = savgol_filter(arr, window_length=min(w, n if n % 2 == 1 else n - 1),
+                          polyorder=poly) if n >= w else arr
+
+    t_orig  = np.arange(n, dtype=float)
+    t_dense = np.linspace(0, n - 1, n * factor)
+    y_dense = make_interp_spline(t_orig, y_sg, k=3)(t_dense)
+    return t_dense, y_dense
+
+
+def plot_fs_ad_filled(sample_idx: int,
+                      fs_arr: np.ndarray,
+                      ad_norm_arr: np.ndarray,
+                      cfg: dict,
+                      fig_dir: str,
+                      smooth_window: int = 35,
+                      smooth_poly: int = 3,
+                      resample_factor: int = 10,
+                      ad_smooth_window: int = 35,
+                      ad_smooth_poly: int = 3) -> None:
+    """
+    绘制单个样本的 F_S 与 Ã_d 平滑折线图，并用栅格线填充两者之间的封闭区域：
+      · F_S > Ã_d  →  黄色斜线栅格填充（高风险区）
+      · F_S < Ã_d  →  绿色斜线栅格填充（低风险区）
+
+    Parameters
+    ----------
+    sample_idx      : 样本编号（用于标题/文件名）
+    fs_arr          : shape (T,) 的 F_S 时序数组
+    ad_norm_arr     : shape (T,) 的 Ã_d 归一化时序数组
+    cfg             : 配置字典（读取 vis.dpi）
+    fig_dir         : 图片保存目录
+    smooth_window   : F_S 的 SG 滤波窗口长度（默认 15）
+    smooth_poly     : F_S 的 SG 多项式阶数（默认 3）
+    resample_factor : 样条插值升采样倍数（默认 10）
+    ad_smooth_window: Ã_d 的 SG 滤波窗口长度（默认 51，更平滑）
+    ad_smooth_poly  : Ã_d 的 SG 多项式阶数（默认 3）
+    """
+    set_paper_style()
+    assert len(fs_arr) == len(ad_norm_arr), "F_S 与 Ã_d 长度必须一致"
+
+    t_dense, fs_dense = _smooth_and_resample(
+        fs_arr,      smooth_window,    smooth_poly,    resample_factor)
+    _,       ad_dense = _smooth_and_resample(
+        ad_norm_arr, ad_smooth_window, ad_smooth_poly, resample_factor)
+
+    fig, ax = plt.subplots(figsize=FIGURE_SIZE_WIDE)
+
+    ax.plot(t_dense, fs_dense, color=PRIMARY_COLOR,   lw=LINE_WIDTH, label=r'$F_S$', zorder=4)
+    ax.plot(t_dense, ad_dense, color=SECONDARY_COLOR, lw=LINE_WIDTH, label=r'$\tilde{A}_d$', zorder=4)
+
+    ax.fill_between(
+        t_dense, fs_dense, ad_dense,
+        where=(fs_dense >= ad_dense),
+        interpolate=True,
+        facecolor='none',
+        edgecolor='goldenrod',
+        hatch='///',
+        linewidth=0.0,
+        zorder=3,
+        alpha=0.85,
+    )
+
+    ax.fill_between(
+        t_dense, fs_dense, ad_dense,
+        where=(fs_dense <= ad_dense),
+        interpolate=True,
+        facecolor='none',
+        edgecolor='seagreen',
+        hatch='///',
+        linewidth=0.0,
+        zorder=3,
+        alpha=0.85,
+    )
+
+    ax.set_xlim(t_dense[15 * resample_factor], t_dense[-1])
+    ax.set_ylim(
+        min(fs_dense.min(), ad_dense.min()) - 0.02,
+        max(fs_dense.max(), ad_dense.max()) + 0.05,
+    )
+    ax.set_xlabel('时间t (s)', fontsize=18, weight='bold')
+    ax.set_ylabel('归一化水平', fontsize=18, weight='bold')
+
+    legend_handles = [
+        plt.Line2D([0], [0], color=PRIMARY_COLOR,   lw=LINE_WIDTH, label=r'任务需求'),
+        plt.Line2D([0], [0], color=SECONDARY_COLOR, lw=LINE_WIDTH, label=r'驾驶能力'),
+        mpatches.Patch(facecolor='none', edgecolor='goldenrod', hatch='///', label=r'风险状态'),
+        mpatches.Patch(facecolor='none', edgecolor='seagreen', hatch='///', label=r'安全状态'),
+    ]
+    ax.legend(handles=legend_handles, loc='upper right', fontsize=15, framealpha=0.9)
+    ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
+    ax.tick_params(axis='both', labelsize=15, direction='out', length=4.5, width=1.0)
+    _apply_spine(ax)
+
+    plt.tight_layout()
+    _savefig(fig, os.path.join(fig_dir, f'fs_ad_filled_sample{sample_idx}.png'), cfg['vis']['dpi'])
 
 
 # =============================================================================
@@ -875,7 +1029,7 @@ def plot_roc_curve(
                label=f"最优阈值={best_thr:.3f}")
     ax.set_xlabel("假阳性率 (FPR)", fontsize=12)
     ax.set_ylabel("真阳性率 (TPR)", fontsize=12)
-    ax.set_title("R* 判别异常事件 ROC 曲线", fontsize=13)
+    ax.set_title("R 判别异常事件 ROC 曲线", fontsize=13)
     ax.legend(fontsize=10)
     ax.grid(alpha=GRID_ALPHA)
     _apply_spine(ax)
@@ -935,27 +1089,27 @@ def plot_risk_event_rate(
     _savefig(fig, os.path.join(fig_dir, save_name), dpi)
 
 
-def plot_r_star_boxplot(
+def plot_r_boxplot(
     ev0: np.ndarray,
     ev1: np.ndarray,
     p_str: str,
     cfg: dict,
     fig_dir: str,
-    save_name: str = "fig_r_star_boxplot.png",
+    save_name: str = "fig_r_boxplot.png",
 ) -> None:
     """
-    绘制 R* 在无异常事件组 vs. 异常事件组之间的箱线图，
+    绘制 R 在无异常事件组 vs. 异常事件组之间的箱线图，
     并在标题中标注 Mann-Whitney U 检验 p 值。
 
-    此函数由 risk_validator.py 的 plot_r_star_by_event() 调用。
+    此函数由 risk_validator.py 的 plot_r_by_event() 调用。
 
     Args:
-        ev0:      无异常事件窗口的 R* 数组
-        ev1:      异常事件窗口的 R* 数组
+        ev0:      无异常事件窗口的 R 数组
+        ev1:      异常事件窗口的 R 数组
         p_str:    p 值字符串，例如 "<0.001" 或 "0.0032"
         cfg:      配置字典
         fig_dir:  图片保存目录
-        save_name: 文件名（默认 fig_r_star_boxplot.png）
+        save_name: 文件名（默认 fig_r_boxplot.png）
     """
     set_paper_style()
 
@@ -971,142 +1125,12 @@ def plot_r_star_boxplot(
                     medianprops={"color": "black", "lw": 2})
     bp["boxes"][0].set_facecolor(color_no_event)
     bp["boxes"][1].set_facecolor(color_event)
-    ax.set_ylabel("风险度 R*", fontsize=12)
-    ax.set_title(f"R* 分布（事件 vs. 无事件）\nMann-Whitney U, p={p_str}",
+    ax.set_ylabel("风险度 R", fontsize=12)
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_title(f"R 分布（事件 vs. 无事件）\nMann-Whitney U, p={p_str}",
                  fontsize=12)
     ax.grid(axis="y", alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
 
     _savefig(fig, os.path.join(fig_dir, save_name), dpi)
-
-
-def _smooth_and_resample(arr: np.ndarray,
-                          window: int = 15,
-                          poly: int = 3,
-                          factor: int = 10) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    先 Savitzky-Golay 平滑，再三次样条插值升采样。
-
-    Returns
-    -------
-    t_dense : 升采样后的 x 轴坐标
-    y_dense : 升采样后的 y 值
-    """
-    n = len(arr)
-    w = window if window % 2 == 1 else window + 1
-    y_sg = savgol_filter(arr, window_length=min(w, n if n % 2 == 1 else n - 1),
-                          polyorder=poly) if n >= w else arr
-
-    t_orig  = np.arange(n, dtype=float)
-    t_dense = np.linspace(0, n - 1, n * factor)
-    y_dense = make_interp_spline(t_orig, y_sg, k=3)(t_dense)
-    return t_dense, y_dense
-
-
-def plot_fs_ad_filled(sample_idx: int,
-                      fs_arr: np.ndarray,
-                      ad_norm_arr: np.ndarray,
-                      cfg: dict,
-                      fig_dir: str,
-                      smooth_window: int = 35,
-                      smooth_poly: int = 3,
-                      resample_factor: int = 10,
-                      ad_smooth_window: int = 35,
-                      ad_smooth_poly: int = 3) -> None:
-    """
-    绘制单个样本的 F_S 与 Ã_d 平滑折线图，并用栅格线填充两者之间的封闭区域：
-      · F_S > Ã_d  →  黄色斜线栅格填充（高风险区）
-      · F_S < Ã_d  →  绿色斜线栅格填充（低风险区）
-
-    Parameters
-    ----------
-    sample_idx      : 样本编号（用于标题/文件名）
-    fs_arr          : shape (T,) 的 F_S 时序数组
-    ad_norm_arr     : shape (T,) 的 Ã_d 归一化时序数组
-    cfg             : 配置字典（读取 vis.dpi）
-    fig_dir         : 图片保存目录
-    smooth_window   : F_S 的 SG 滤波窗口长度（默认 15）
-    smooth_poly     : F_S 的 SG 多项式阶数（默认 3）
-    resample_factor : 样条插值升采样倍数（默认 10）
-    ad_smooth_window: Ã_d 的 SG 滤波窗口长度（默认 51，更平滑）
-    ad_smooth_poly  : Ã_d 的 SG 多项式阶数（默认 3）
-    """
-    set_paper_style()
-    assert len(fs_arr) == len(ad_norm_arr), "F_S 与 Ã_d 长度必须一致"
-
-    # ── 平滑 + 升采样（F_S 与 Ã_d 分别使用独立平滑参数）────────
-    t_dense, fs_dense = _smooth_and_resample(
-        fs_arr,      smooth_window,    smooth_poly,    resample_factor)
-    # ad_norm_arr=ad_norm_arr*3-1.7
-    _,       ad_dense = _smooth_and_resample(
-        ad_norm_arr, ad_smooth_window, ad_smooth_poly, resample_factor)
-    ad_dense=ad_dense*1.7-0.5
-
-    fig, ax = plt.subplots(figsize=FIGURE_SIZE_WIDE)
-
-    # ── 平滑折线 ──────────────────────────────────────────────────
-    ax.plot(t_dense, fs_dense, color=PRIMARY_COLOR,   lw=LINE_WIDTH,
-            label=r'$F_S$',         zorder=4)
-    ax.plot(t_dense, ad_dense, color=SECONDARY_COLOR, lw=LINE_WIDTH,
-            label=r'$\tilde{A}_d$', zorder=4)
-
-    # ── 黄色栅格：F_S > Ã_d ──────────────────────────────────────
-    ax.fill_between(
-        t_dense, fs_dense, ad_dense,
-        where=(fs_dense >= ad_dense),
-        interpolate=True,
-        facecolor='none',
-        edgecolor='goldenrod',
-        hatch='///',
-        linewidth=0.0,
-        zorder=3,
-        alpha=0.85,
-    )
-
-    # ── 绿色栅格：F_S < Ã_d ──────────────────────────────────────
-    ax.fill_between(
-        t_dense, fs_dense, ad_dense,
-        where=(fs_dense <= ad_dense),
-        interpolate=True,
-        facecolor='none',
-        edgecolor='seagreen',
-        hatch='///',
-        linewidth=0.0,
-        zorder=3,
-        alpha=0.85,
-    )
-
-    # ── 坐标轴装饰 ────────────────────────────────────────────────
-    # ax.set_xlim(t_dense[0], t_dense[-1])
-    ax.set_xlim(t_dense[15 * resample_factor], t_dense[-1])
-    ax.set_ylim(
-        min(fs_dense.min(), ad_dense.min()) + 0.02,
-        max(fs_dense.max(), ad_dense.max()) + 0.05,
-    )
-    ax.set_xlabel('时间t (s)', fontsize=18, weight='bold')
-    ax.set_ylabel('归一化水平', fontsize=18, weight='bold')
-    # ax.set_title(f'样本 {sample_idx}：任务需求与驾驶能力时序对比',
-    #              fontsize=15, pad=10, weight='bold')
-
-    legend_handles = [
-        plt.Line2D([0], [0], color=PRIMARY_COLOR,   lw=LINE_WIDTH,
-                   label=r'任务需求'),
-        plt.Line2D([0], [0], color=SECONDARY_COLOR, lw=LINE_WIDTH,
-                   label=r'驾驶能力'),
-        mpatches.Patch(facecolor='none', edgecolor='goldenrod',
-                       hatch='///',     label=r'风险状态'),
-        mpatches.Patch(facecolor='none', edgecolor='seagreen',
-                       hatch='///', label=r'安全状态'),
-    ]
-    ax.legend(handles=legend_handles, loc='upper right',
-              fontsize=15, framealpha=0.9)
-    ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
-    ax.tick_params(axis='both', labelsize=15, direction='out',
-               length=4.5, width=1.0)
-    _apply_spine(ax)
-
-    plt.tight_layout()
-    _savefig(fig,
-             os.path.join(fig_dir, f'fs_ad_filled_sample{sample_idx}.png'),
-             cfg['vis']['dpi'])
