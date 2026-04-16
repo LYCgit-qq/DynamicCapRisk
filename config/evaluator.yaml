@@ -4,17 +4,23 @@
 # -------------------------- 路径配置 --------------------------
 paths:
   dataset_pkl: "data/dataset/dataset_aug-False.pkl"
-  # ckpt:        "/root/autodl-tmp/DynamicCapRisk/output/3_prediction/runs/20260416_172929_mtrp/best_model.pt"
-  ckpt:        null  # 自动评估最新 pt
+  ckpt:        "/root/autodl-tmp/DynamicCapRisk/output/3_prediction/runs/20260416_221048_mtrp/best_model.pt"
+  # ckpt:        null  # 自动评估最新 pt
   output_dir:  "output/3_prediction"
 
 # -------------------------- 评估配置 --------------------------
 eval:
-  batch_size:       256     # 推理批次大小
-  split:            "test"  # 评估集：train / val / test
-  risk_thresh_high:  0.1    # 高风险阈值（R > 0.1）
-  risk_thresh_low:  -0.1    # 低风险阈值（R < -0.1）
-  visualize:        true    # 是否可视化评估结果（生成混淆矩阵等）
+  # 原有配置保留（batch_size、split、visualize等）
+  batch_size: 256
+  split: test
+  visualize: true
+  # 阈值来源：config=从配置读取 | file=从CSV文件读取
+  threshold_source: file  
+  # 配置文件阈值（threshold_source=config 时生效）
+  risk_thresh_low: 0.16
+  risk_thresh_high: 0.76
+  # 阈值文件路径（threshold_source=file 时生效）
+  threshold_csv_path: /root/autodl-tmp/DynamicCapRisk/output/2_risk_assessment/results/risk_optimal_threshold.csv
 
 # -------------------------- 分类标签 --------------------------
 class_names: ["低风险", "中风险", "高风险"]

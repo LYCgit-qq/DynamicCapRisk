@@ -1,3 +1,5 @@
+# /root/autodl-tmp/DynamicCapRisk/src/3_prediction/run_grid_search.py
+
 import os
 import yaml
 import time
@@ -8,6 +10,10 @@ from typing import Dict, List
 
 # ===================== 【核心配置】你只需要改这里的参数 =====================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 项目根目录（固定路径）
+PROJECT_ROOT = "/root/autodl-tmp/DynamicCapRisk"
+# 输出根目录（所有日志、临时配置都放在这里，核心修改点）
+OUTPUT_ROOT = os.path.join(PROJECT_ROOT, "output/3_prediction")
 # 基础配置文件路径（自动适配，不用改）
 BASE_CONFIG_PATH = os.path.join(SCRIPT_DIR, "../../config/trainer_dl.yaml")
 
@@ -30,12 +36,13 @@ PARAM_GRID = {
     # "model.ablation": ["none", "no_cross_attn", "single_modal"]
 }
 
-# 临时配置文件存放目录
-TEMP_CONFIG_DIR = os.path.join(SCRIPT_DIR, "temp_configs")
+# 临时配置文件存放目录（输出目录下）
+TEMP_CONFIG_DIR = os.path.join(OUTPUT_ROOT, "temp_configs")
 # 训练脚本路径（固定，不用改）
 TRAIN_SCRIPT = os.path.join(SCRIPT_DIR, "trainer_dl.py")
-# 日志文件（记录所有实验结果）
-LOG_FILE = os.path.join(SCRIPT_DIR, f"grid_search_log_{datetime.now().strftime('%Y%m%d')}.txt")
+# 日志文件目录+路径（输出目录下，按日期命名）
+LOG_DIR = os.path.join(OUTPUT_ROOT, "logs")
+LOG_FILE = os.path.join(LOG_DIR, f"grid_search_log_{datetime.now().strftime('%Y%m%d')}.txt")
 # ======================================================================
 
 def load_base_config() -> Dict:
@@ -75,8 +82,10 @@ def write_log(message: str):
         f.write(log_msg)
 
 def main():
-    # 创建临时文件夹
+    # 自动创建所有输出目录（不存在则创建，存在则跳过）
     os.makedirs(TEMP_CONFIG_DIR, exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
+    
     # 加载基础配置
     base_config = load_base_config()
     # 生成所有参数组合
@@ -96,17 +105,16 @@ def main():
         for key, value in combo.items():
             set_nested_param(curr_config, key, value)
 
-        # 生成临时配置文件
+        # 生成临时配置文件（输出目录下）
         config_path = os.path.join(TEMP_CONFIG_DIR, f"temp_{exp_name}.yaml")
         save_config(curr_config, config_path)
 
         # 启动训练（关键命令）
         try:
-            # 调用你的训练脚本，指定配置文件
+            # 调用训练脚本，指定配置文件
             cmd = [sys.executable, TRAIN_SCRIPT, "-c", config_path]
-            # 指定工作目录为项目根目录，不修改yaml也能找到数据集
-            project_root = "/root/autodl-tmp/DynamicCapRisk"
-            subprocess.run(cmd, check=True, cwd=project_root)
+            # 工作目录指定为项目根目录
+            subprocess.run(cmd, check=True, cwd=PROJECT_ROOT)
             cost = round(time.time() - start_time, 2)
             write_log(f"✅ 实验成功！耗时：{cost}s | {exp_name}")
         except subprocess.CalledProcessError as e:

@@ -433,6 +433,7 @@ def train(cfg: dict) -> None:
         eval_cfg["paths"]["ckpt"] = run_paths["best_ckpt"]
         eval_cfg["paths"]["dataset_pkl"] = cfg["paths"]["dataset_pkl"]
         eval_cfg["eval"]["split"] = "test"
+        eval_cfg["eval"]["visualize"] = False
         
         run_evaluation(eval_cfg)
         print("\n✅ 自动评估完成！结果已保存至模型目录的 eval 文件夹")

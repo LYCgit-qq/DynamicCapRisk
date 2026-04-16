@@ -1,6 +1,19 @@
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
 
+# ====================== 修复缓存报错 + 中文显示 ======================
+import matplotlib
+# 手动创建缓存目录，避免文件不存在报错
+cache_dir = matplotlib.get_cachedir()
+os.makedirs(cache_dir, exist_ok=True)
+# 清理缓存文件，不删除文件夹
+for f in os.listdir(cache_dir):
+    try:
+        os.remove(os.path.join(cache_dir, f))
+    except:
+        pass
+# ==================================================================
+
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,33 +22,29 @@ import matplotlib.patches as mpatches
 
 RANDOM_STATE = 42
 
-# ====================== 完全对齐参考脚本的统一风格配置 ======================
-# 主色调：学术蓝系
-PRIMARY_COLOR   = "#2C5F8A"   # 主蓝（直方图柱体、主折线）
-SECONDARY_COLOR = "#E07B39"   # 暖橙（均值线、标注三角、早停点）
-ACCENT_COLOR    = "#4CAF82"   # 绿色（辅助标注）
-LIGHT_FILL      = "#D6E8F5"   # 浅蓝填充（区间着色）
-GRAY_FILL       = "#EBEBEB"   # 浅灰填充
+# ====================== 统一风格配置 ======================
+PRIMARY_COLOR   = "#2C5F8A"
+SECONDARY_COLOR = "#E07B39"
+ACCENT_COLOR    = "#4CAF82"
+LIGHT_FILL      = "#D6E8F5"
+GRAY_FILL       = "#EBEBEB"
 
-# 分组色板
 GROUP_PALETTE = {
     "高能力组":  "#2C5F8A",
     "中能力组":  "#4CAF82",
     "低能力组":  "#E07B39",
 }
-# 聚类/分组配色（6组风险预测专用）
 GROUP_COLORS = ["#2C5F8A", "#E07B39", "#4CAF82", "#A259C4", "#E05C5C", "#F5C518"]
 
-# 图形尺寸
-FIGURE_SIZE_WIDE   = (11, 6)    # 宽幅图（损失曲线）
-FIGURE_SIZE_SQUARE = (10, 9)    # 方形图（混淆矩阵）
-FIGURE_SIZE_GRID   = (18, 10)   # 子图网格（6组预测）
+FIGURE_SIZE_WIDE   = (11, 6)
+FIGURE_SIZE_SQUARE = (10, 9)
+FIGURE_SIZE_GRID   = (18, 10)
 LINE_WIDTH   = 1.8
 MARKER_SIZE  = 100
 GRID_ALPHA   = 0.3
 SPINE_ALPHA  = 0.4
 
-# ====================== 统一学术样式设置 ======================
+# ====================== 中文字体配置（AutoDL 专用） ======================
 def set_paper_style():
     sns.set_style("whitegrid", {
         "axes.grid":          True,
@@ -54,8 +63,8 @@ def set_paper_style():
         "ytick.major.width":  1.0,
     })
     plt.rcParams.update({
-        "font.family":        "sans-serif",
-        "font.sans-serif":    ["SimSun", "Times New Roman", "DejaVu Sans"],
+        "font.family":        "WenQuanYi Zen Hei",
+        "font.sans-serif":    ["WenQuanYi Zen Hei", "Arial", "Times New Roman"],
         "axes.unicode_minus": False,
         "font.size":          12,
         "axes.labelsize":     14,
@@ -72,7 +81,7 @@ def set_paper_style():
         "savefig.format":     "png",
     })
 
-# ====================== 统一坐标轴脊柱样式 ======================
+# ====================== 工具函数 ======================
 def _apply_spine(ax) -> None:
     for spine in ax.spines.values():
         spine.set_visible(True)
@@ -80,7 +89,6 @@ def _apply_spine(ax) -> None:
         spine.set_linewidth(1.2)
     ax.tick_params(axis='both', direction='out', length=4.5, width=1.0)
 
-# ====================== 统一保存与关闭 ======================
 def _save_and_close(fig, save_path, msg=""):
     if save_path:
         save_path = Path(save_path)
@@ -90,7 +98,7 @@ def _save_and_close(fig, save_path, msg=""):
     plt.close(fig)
 
 # =============================================================================
-# 论文图表1：模型训练损失曲线（图5.6）
+# 模型训练损失曲线
 # =============================================================================
 def plot_training_loss(
     train_loss: np.ndarray,
@@ -103,17 +111,14 @@ def plot_training_loss(
     fig, ax = plt.subplots(figsize=FIGURE_SIZE_WIDE)
     x = np.arange(len(train_loss))
 
-    # 统一配色绘制损失曲线
     ax.plot(x, train_loss, label='训练集损失', color=PRIMARY_COLOR, linewidth=LINE_WIDTH)
     ax.plot(x, val_loss, label='验证集损失', color=SECONDARY_COLOR, linewidth=LINE_WIDTH)
 
-    # 早停点标注（统一风格）
     ax.scatter(early_stop_epoch, val_loss[early_stop_epoch],
                 color=SECONDARY_COLOR, s=MARKER_SIZE, zorder=5,
                 label=f'早停点(第{early_stop_epoch}轮)')
     ax.axvline(x=early_stop_epoch, color=SECONDARY_COLOR, linestyle='--', alpha=0.7)
 
-    # 样式配置
     ax.set_xlabel('训练轮数 (Epochs)')
     ax.set_ylabel('损失值')
     ax.set_yscale('log')
@@ -122,47 +127,66 @@ def plot_training_loss(
     ax.legend()
     ax.grid(alpha=GRID_ALPHA)
     
-    # 应用坐标轴样式
     _apply_spine(ax)
-    # 保存
     _save_and_close(fig, save_path, msg="训练损失曲线")
 
 # =============================================================================
-# 论文图表2：6组风险度回归预测（图5.8）
+# 6组风险度回归预测
 # =============================================================================
 def plot_risk_regression_6groups(
     group_data: list,
-    save_path: str,          # 必选参数移到前面
+    save_path: str,
     low_thresh: float = -0.1,
     high_thresh: float = 0.1
 ):
     set_paper_style()
-    fig, axes = plt.subplots(2, 3, figsize=FIGURE_SIZE_GRID)
+    # 3行2列布局，宽高比拉宽压低（适配底部图例）
+    fig, axes = plt.subplots(3, 2, figsize=(18, 10))
     axes = axes.flatten()
 
-    for i, (ax, data, color) in enumerate(zip(axes, group_data, GROUP_COLORS)):
-        x = np.arange(len(data['true']))
-        # 真实值（黑色）+ 预测值（分组配色）
-        ax.plot(x, data['true'], label='真实风险度', color='black', linewidth=LINE_WIDTH)
-        ax.plot(x, data['pred'], label='预测风险度', color=color, linewidth=LINE_WIDTH, alpha=0.8)
+    # 🔥 统一配置：预测风险度固定颜色
+    PRED_COLOR = "#1f77b4"  # 标准蓝色（可自行修改）
 
-        # 阈值线（统一配色）
-        ax.axhline(y=high_thresh, color=SECONDARY_COLOR, linestyle='--', label='高风险阈值(0.1)', alpha=0.8)
-        ax.axhline(y=low_thresh, color=PRIMARY_COLOR, linestyle='--', label='低风险阈值(-0.1)', alpha=0.8)
+    for i, (ax, data) in enumerate(zip(axes, group_data)):
+        x = np.arange(len(data['true']))
+        # 真实值：黑色固定
+        ax.plot(x, data['true'], label='真实风险度', color='black', linewidth=LINE_WIDTH)
+        # 预测值：统一颜色，不再分组变色
+        ax.plot(x, data['pred'], label='预测风险度', color=PRED_COLOR, linewidth=LINE_WIDTH, alpha=0.8)
+
+        # 动态阈值线 + 动态标签
+        ax.axhline(y=high_thresh, color=SECONDARY_COLOR, linestyle='--', 
+                   label=f'高风险阈值({high_thresh})', alpha=0.8)
+        ax.axhline(y=low_thresh, color=PRIMARY_COLOR, linestyle='--', 
+                   label=f'低风险阈值({low_thresh})', alpha=0.8)
 
         ax.set_title(f'第{i+1}组测试数据', fontweight='bold')
-        ax.set_ylim(-1.0, 1.0)
-        ax.legend(fontsize=10)
+        # Y轴自适应（删除固定范围）
         ax.grid(alpha=GRID_ALPHA)
         _apply_spine(ax)
+        # 🔥 关键：关闭子图单独图例
+        # ax.legend() 
+
+    # 🔥 核心：全图统一图例 + 底部横排
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles, labels,
+        loc='lower center',    # 底部居中
+        bbox_to_anchor=(0.5, 0.02),  # 精确定位
+        ncol=4,                # 横向4列排列
+        fontsize=12,
+        frameon=True,
+        fancybox=True,
+        shadow=True
+    )
 
     fig.suptitle('6组测试数据风险度回归预测对比', fontsize=16, fontweight='bold')
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.92)
+    # 🔥 调整底部间距，给图例留空间
+    plt.tight_layout(rect=[0, 0.08, 1, 0.96])
     _save_and_close(fig, save_path, msg="6组风险度预测图")
-    
+            
 # =============================================================================
-# 论文图表3：风险等级混淆矩阵（图5.6）
+# 风险等级混淆矩阵
 # =============================================================================
 def plot_confusion_matrix(
     cm: np.ndarray,
@@ -172,7 +196,6 @@ def plot_confusion_matrix(
     set_paper_style()
     fig, ax = plt.subplots(figsize=FIGURE_SIZE_SQUARE)
     
-    # 统一学术蓝热力图
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=class_names,
                 yticklabels=class_names,
