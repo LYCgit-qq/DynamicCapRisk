@@ -24,10 +24,10 @@ DynamicCapRisk/
 │   ├── README_workzone.md        # 工作区说明
 │   ├── dataset/                  # 数据集文件
 │   │   ├── dataset_stats_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.csv
-│   │   └── mtjp_window_aligned.csv
+│   │   └── mtrp_window_aligned.csv
 │   ├── processed/                # 预处理后数据
-│   │   ├── mtjp_dataset_stats_aug-False.csv
-│   │   ├── mtjp_window_aligned.csv
+│   │   ├── mtrp_dataset_stats_aug-False.csv
+│   │   ├── mtrp_window_aligned.csv
 │   │   ├── questionnaire_preprocessed.csv
 │   │   ├── questionnaire_standardized.csv
 │   │   ├── work_zone_1_continuous.csv
@@ -87,8 +87,8 @@ DynamicCapRisk/
 - **等级划分**: 阈值敏感性分析（tci_model.py）
 
 ### 第5章：联合预测模型
-- **MT-JP架构**: Transformer编码器（mtjp_model.py）
-- **多模态融合**: 跨模态注意力（mtjp_model.py）
+- **MT-JP架构**: Transformer编码器（mtrp_model.py）
+- **多模态融合**: 跨模态注意力（mtrp_model.py）
 - **损失函数**: 多任务学习 + 一致性约束（losses.py）
 - **模型训练**: AdamW + 余弦退火（trainer.py）
 

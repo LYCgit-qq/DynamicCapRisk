@@ -1,12 +1,11 @@
-# ============================================================
-# MT-JP 单模型评估器配置
+# /root/autodl-tmp/DynamicCapRisk/config/evaluator.yaml
 # 对应脚本: src/3_prediction/evaluator.py
-# ============================================================
 
 # -------------------------- 路径配置 --------------------------
 paths:
-  dataset_pkl: "data/dataset/dataset_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.pkl"
-  ckpt:        "output/3_prediction/runs/20260310_155225_mtjp/best_model.pt"  # 替换为实际路径
+  dataset_pkl: "data/dataset/dataset_aug-False.pkl"
+  ckpt:        "/root/autodl-tmp/DynamicCapRisk/output/3_prediction/runs/20260416_172929_mtrp/best_model.pt"
+  # ckpt:        null  # 自动评估最新 pt
   output_dir:  "output/3_prediction"
 
 # -------------------------- 评估配置 --------------------------

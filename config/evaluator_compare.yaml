@@ -19,7 +19,7 @@ paths:
     lstm:     ""   # 例: "output/3_prediction/runs/20260301_lstm/best_model.pt"
     gru:      ""   # 例: "output/3_prediction/runs/20260301_gru/best_model.pt"
     cnn_lstm: ""   # 例: "output/3_prediction/runs/20260301_cnn_lstm/best_model.pt"
-    mt_jp:    ""   # 例: "output/3_prediction/runs/20260310_155225_mtjp/best_model.pt"
+    mt_jp:    ""   # 例: "output/3_prediction/runs/20260310_155225_mtrp/best_model.pt"
 
 # -------------------------- 评估配置 --------------------------
 eval:

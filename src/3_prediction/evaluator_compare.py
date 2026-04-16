@@ -27,7 +27,7 @@ MT-JP 多模型横向对比评估器
   python evaluator_compare.py \\
       --ckpt_list svr:runs/svr/model.pkl cart:runs/cart/model.pkl \\
                   lstm:runs/lstm/best_model.pt gru:runs/gru/best_model.pt \\
-                  cnn_lstm:runs/cnn_lstm/best_model.pt mt_jp:runs/mtjp/best_model.pt
+                  cnn_lstm:runs/cnn_lstm/best_model.pt mt_jp:runs/mtrp/best_model.pt
 
   # 命令行补充/覆盖 YAML 中的元信息
   python evaluator_compare.py \\
@@ -53,7 +53,7 @@ from typing import Dict, List, Optional, Tuple
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from src.models.mtjp_model import build_model
+from src.models.mtrp_model import build_model
 from trainer_dl import TorchDataset
 
 
@@ -91,7 +91,7 @@ _MODEL_TYPE_KEYWORDS = {
     "lstm":     ["lstm"],
     "gru":      ["gru"],
     "cnn_lstm": ["cnn_lstm", "cnnlstm"],
-    "mt_jp":    ["mtjp", "mt_jp", "mt-jp"],
+    "mt_jp":    ["mtrp", "mt_jp", "mt-jp"],
 }
 
 _DISPLAY_NAMES = {
@@ -614,7 +614,7 @@ def main():
                         help="自动扫描检查点根目录（覆盖 YAML paths.compare_ckpt_dir）")
     parser.add_argument("--ckpt_list",     type=str, nargs="+", default=None,
                         help="手动指定 model_type:ckpt_path 列表，空格分隔\n"
-                             "例: svr:runs/svr/model.pkl mt_jp:runs/mtjp/best_model.pt")
+                             "例: svr:runs/svr/model.pkl mt_jp:runs/mtrp/best_model.pt")
     parser.add_argument("--train_times",   type=str, default=None,
                         help="训练时间(分)，格式: model:time,...\n例: svr:23.5,mt_jp:62.8")
     parser.add_argument("--param_counts",  type=str, default=None,

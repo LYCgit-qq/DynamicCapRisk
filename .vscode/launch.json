@@ -128,7 +128,7 @@
             }
         },
         {
-            "name": "评估预测结果（MTJP）",
+            "name": "评估预测结果（mtrp）",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/src/3_prediction/evaluator.py",

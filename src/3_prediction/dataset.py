@@ -1,4 +1,4 @@
-# D:\Local\DynamicCapRisk\src\3_prediction\dataset.py
+# /root/autodl-tmp/DynamicCapRisk/src/3_prediction/dataset.py
 # MT-JP 联合预测模型数据集构建模块
 
 import os
@@ -626,7 +626,7 @@ def main():
         act_list, eye_list, phy_list, cap_data, risk_df, cfg
     )
     mid_path = os.path.join(
-        os.path.dirname(cfg["paths"]["output_pkl"]), "mtjp_window_aligned.csv"
+        os.path.dirname(cfg["paths"]["output_pkl"]), "mtrp_window_aligned.csv"
     )
     os.makedirs(os.path.dirname(mid_path), exist_ok=True)
     window_df.to_csv(mid_path, index=False, encoding="utf-8-sig")
