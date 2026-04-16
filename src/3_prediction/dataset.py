@@ -1,13 +1,5 @@
-"""
-build_dataset.py
-MT-JP 联合预测模型数据集构建模块
-
-用法：
-  python dataset.py                              # 使用默认 config/dataset.yaml
-  python dataset.py -c path/to/dataset.yaml      # 指定配置文件
-  python dataset.py --seq_len 5 --seed 42        # 命令行参数覆盖 yaml
-  python dataset.py --no_augment                 # 禁用数据增强（覆盖 yaml）
-"""
+# D:\Local\DynamicCapRisk\src\3_prediction\dataset.py
+# MT-JP 联合预测模型数据集构建模块
 
 import os
 import pickle

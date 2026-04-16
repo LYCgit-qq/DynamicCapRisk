@@ -11,11 +11,11 @@ MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型训练器
 输出目录：output/3_prediction/runs/
 
 用法：
-  python trainer.py
-  python trainer.py -c config/trainer_dl.yaml
-  python trainer.py --model_type lstm
-  python trainer.py --model_type gru   --lr 5e-4
-  python trainer.py --model_type cnn_lstm
+  python trainer_dl.py
+  python trainer_dl.py -c config/trainer_dl.yaml
+  python trainer_dl.py --model_type lstm
+  python trainer_dl.py --model_type gru   --lr 5e-4
+  python trainer_dl.py --model_type cnn_lstm
   多次训练对比：tensorboard --logdir output/3_prediction/runs
 """
 
@@ -197,6 +197,12 @@ def build_dataloaders(
     tr = _loader("train", True)
     va = _loader("val", False)
     te = _loader("test", False)
+    
+    # ✅ 强制校验输入特征维度为18维（与数据集完全对齐）
+    sample_batch = next(iter(tr))
+    feat_dim = sample_batch[0].shape[-1]
+    assert feat_dim == 18, f"模型输入维度错误！期望 18 维，实际 {feat_dim} 维"
+    
     print(
         f"  DataLoader: train={len(tr.dataset)} / val={len(va.dataset)} / test={len(te.dataset)}"
     )
@@ -311,7 +317,8 @@ def _run_epoch(
     with ctx:
         for X, ya, yr, yc in loader:
             X, ya, yr, yc = X.to(device), ya.to(device), yr.to(device), yc.to(device)
-            f_s = X[:, -1, 16]  # 环境特征 F_S（最后时间步，第17维）
+            # ✅ 修复：F_S 正确索引（18维最后一维 = 17）
+            f_s = X[:, -1, 17]
 
             outputs = model(X)
             loss, loss_dict = criterion(outputs, ya, yr, yc, f_s)
@@ -436,14 +443,11 @@ def train(cfg: dict) -> None:
         writer.add_scalar("Loss_val/consistency", va_losses["consistency"], epoch)
         writer.add_scalar("LR", lr_now, epoch)
 
-        grad_norm = (
-            sum(
-                p.grad.data.norm(2).item() ** 2
-                for p in model.parameters()
-                if p.grad is not None
-            )
-            ** 0.5
-        )
+        # ✅ 优化：梯度范数计算（增加空值保护，防止报错）
+        grad_norm = 0.0
+        grad_list = [p.grad.data.norm(2).item() for p in model.parameters() if p.grad is not None]
+        if grad_list:
+            grad_norm = np.sqrt(sum([g**2 for g in grad_list]))
         writer.add_scalar("Grad/norm", grad_norm, epoch)
 
         # ── 保存最优权重 ──────────────────────────────────────
@@ -582,10 +586,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python trainer.py                              # 使用默认 YAML，默认模型(mtjp)
-  python trainer.py --model_type lstm            # 切换为 LSTM 基线
-  python trainer.py --model_type gru  --lr 5e-4  # GRU + 自定义学习率
-  python trainer.py --model_type cnn_lstm
+  python trainer_dl.py                              # 使用默认 YAML，默认模型(mtjp)
+  python trainer_dl.py --model_type lstm            # 切换为 LSTM 基线
+  python trainer_dl.py --model_type gru  --lr 5e-4  # GRU + 自定义学习率
+  python trainer_dl.py --model_type cnn_lstm
         """,
     )
     parser.add_argument(

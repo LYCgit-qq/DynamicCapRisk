@@ -1,18 +1,10 @@
 # D:\Local\DynamicCapRisk\config\trainer_dl.yaml
-
-# ============================================================
-# MT-JP / LSTM / GRU / CNN-LSTM 联合预测模型 — 训练器配置
-# 对应脚本: src/3_prediction/trainer.py
 #
 # 切换模型只需修改 model.model_type：
 #   mtjp      → Multi-Task Joint Prediction（默认）
 #   lstm      → 2-层 LSTM 多任务基线
 #   gru       → 2-层 GRU 多任务基线
 #   cnn_lstm  → CNN-LSTM 混合多任务基线
-#
-# 也可通过命令行覆盖：
-#   python trainer.py --model_type lstm --lr 5e-4
-#
 # ──────────────────────────────────────────────────────────
 # 消融实验快速切换（仅对 model_type=mtjp 生效）：
 #
@@ -21,16 +13,16 @@
 #     no_cross_attn   → 移除交叉注意力（RiskBranch 改为线性层）
 #     no_consistency  → 移除一致性损失（将下方 lambda_consistency 置 0.0）
 #     single_modal    → 仅使用行为特征，跳过融合层
-#     early_fusion    → 早期融合（17维直接输入单一编码器）
+#     early_fusion    → 早期融合（18维直接输入单一编码器）
 #     late_fusion     → 晚期融合（四路各自预测后均值融合）
 #
 #   注意：no_consistency 只需改 loss.lambda_consistency=0.0，
 #         ablation 字段保持 "none" 即可，模型结构不变。
-# ============================================================
 
 # -------------------------- 路径配置 --------------------------
 paths:
-  dataset_pkl: "data/dataset/dataset_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.pkl"
+  dataset_pkl: "data/dataset/dataset_aug-False.pkl"
+  # dataset_pkl: "data/dataset/dataset_aug-True_onlyTrain-True_gaussStd-0.05_timeWarpSigma-0.2_featDrop-0.1_magWarpSigma-0.1.pkl"
   runs_root:   "output/3_prediction/runs"
 
 # -------------------------- 模型配置 --------------------------
@@ -45,7 +37,7 @@ model:
 
   # ── 公共字段（所有模型均使用）────────────────────────────────
   seq_len:    5            # 历史步数 T（必须与 dataset.yaml 一致）
-  input_dim:  17           # 输入特征维度 D
+  input_dim:  18           # ✅ 修正：输入特征维度 D=18（对齐数据集+模型）
   n_classes:  3            # 风险等级分类数 {低:0, 中:1, 高:2}
   dropout:    0.2          # Dropout 率
 
