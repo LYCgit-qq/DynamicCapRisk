@@ -1,5 +1,5 @@
 # /root/autodl-tmp/DynamicCapRisk/src/3_prediction/dataset.py
-# MT-JP 联合预测模型数据集构建模块
+# MT-RP 联合预测模型数据集构建模块
 
 import os
 import pickle
@@ -9,6 +9,7 @@ import yaml
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
+from src.models.augment import Augmentor
 
 warnings.filterwarnings("ignore")
 
@@ -514,6 +515,119 @@ def save_dataset(
     stats_df.to_csv(output_stats, index=False, encoding="utf-8-sig")
     print(f"  特征统计 CSV → {output_stats}")
 
+# =============================================================================
+# 7.5 类别平衡增强（针对 risk_cls 的过采样）
+# =============================================================================
+
+
+def class_balanced_augment(
+    X_tr: np.ndarray,
+    ya_tr: np.ndarray,
+    yr_tr: np.ndarray,
+    yc_tr: np.ndarray,
+    meta_tr: pd.DataFrame,
+    aug,
+    cb_cfg: dict,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
+    """
+    按风险分类 (0=低 / 1=中 / 2=高) 分组后，对少数类反复调用 aug.apply 直到
+    达到目标数量，实现过采样式类别平衡。
+
+    目标数量: target_c = max_count × multiplier[c]
+      - max_count : 训练集中原始最多类的样本数（通常是低风险）
+      - multiplier: 从 yaml 读取，low/medium/high 独立可调
+    """
+    mult_map = {
+        0: float(cb_cfg["multiplier"].get("low", 1.0)),
+        1: float(cb_cfg["multiplier"].get("medium", 1.0)),
+        2: float(cb_cfg["multiplier"].get("high", 1.0)),
+    }
+    max_rounds = int(cb_cfg.get("max_rounds", 20))
+
+    # 原始各类数量
+    orig_counts = {c: int((yc_tr == c).sum()) for c in [0, 1, 2]}
+    max_count = max(orig_counts.values())
+    target_counts = {c: int(max_count * mult_map[c]) for c in [0, 1, 2]}
+
+    print(f"    原始类别分布: 低={orig_counts[0]}, 中={orig_counts[1]}, 高={orig_counts[2]}")
+    print(
+        f"    目标类别分布: 低={target_counts[0]} (×{mult_map[0]:.2f}), "
+        f"中={target_counts[1]} (×{mult_map[1]:.2f}), "
+        f"高={target_counts[2]} (×{mult_map[2]:.2f})"
+    )
+
+    # 确保 meta_tr 有 augmented 列
+    meta_tr = meta_tr.copy().reset_index(drop=True)
+    meta_tr["augmented"] = False
+
+    out_X, out_ya, out_yr, out_yc, out_meta = [], [], [], [], []
+
+    for c in [0, 1, 2]:
+        mask = yc_tr == c
+        n_orig = int(mask.sum())
+        if n_orig == 0:
+            continue
+
+        X_c = X_tr[mask]
+        ya_c = ya_tr[mask]
+        yr_c = yr_tr[mask]
+        yc_c = yc_tr[mask]
+        meta_c = meta_tr[mask].reset_index(drop=True)
+
+        # 1) 保留该类原始样本
+        out_X.append(X_c)
+        out_ya.append(ya_c)
+        out_yr.append(yr_c)
+        out_yc.append(yc_c)
+        out_meta.append(meta_c)
+
+        # 2) 若已达/超过目标，跳过增强
+        needed = target_counts[c] - n_orig
+        if needed <= 0:
+            print(f"    类 {c} 原始={n_orig} ≥ 目标={target_counts[c]}，跳过增强")
+            continue
+
+        # 3) 反复调用 aug.apply 过采样，直到满足 needed
+        generated = 0
+        rounds = 0
+        while generated < needed and rounds < max_rounds:
+            rounds += 1
+            Xa, yaa, yra, yca = aug.apply(X_c, ya_c, yr_c, yc_c, split="train")
+            # aug.apply 返回 "原始 + 增强"，增强部分从 n_orig 之后开始
+            new_n = len(Xa) - n_orig
+            if new_n <= 0:
+                print(f"    ⚠️ 类 {c} 第 {rounds} 轮增强未产生新样本，提前停止")
+                break
+
+            take = min(new_n, needed - generated)
+            out_X.append(Xa[n_orig : n_orig + take])
+            out_ya.append(yaa[n_orig : n_orig + take])
+            out_yr.append(yra[n_orig : n_orig + take])
+            out_yc.append(yca[n_orig : n_orig + take])
+
+            # meta 循环填充 + 标记 augmented=True
+            aug_rows = [meta_c.iloc[i % n_orig].to_dict() for i in range(take)]
+            aug_meta_df = pd.DataFrame(aug_rows)
+            aug_meta_df["augmented"] = True
+            out_meta.append(aug_meta_df)
+
+            generated += take
+
+        print(
+            f"    类 {c}: 原始={n_orig} + 增强={generated} = {n_orig + generated} "
+            f"(目标={target_counts[c]}, 轮次={rounds})"
+        )
+
+    X_out = np.concatenate(out_X, axis=0).astype(np.float32)
+    ya_out = np.concatenate(out_ya, axis=0).astype(np.float32)
+    yr_out = np.concatenate(out_yr, axis=0).astype(np.float32)
+    yc_out = np.concatenate(out_yc, axis=0).astype(np.int64)
+    meta_out = pd.concat(out_meta, ignore_index=True)
+
+    final = {c: int((yc_out == c).sum()) for c in [0, 1, 2]}
+    print(f"    最终类别分布: 低={final[0]}, 中={final[1]}, 高={final[2]}")
+    return X_out, ya_out, yr_out, yc_out, meta_out
+
 
 # =============================================================================
 # 主函数
@@ -522,7 +636,7 @@ def save_dataset(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="MT-JP 联合预测模型数据集构建（历史15s → 预测未来3s）",
+        description="MT-RP 联合预测模型数据集构建（历史15s → 预测未来3s）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -582,6 +696,13 @@ def main():
                 aug_params.append(f"featDrop-{methods['feature_dropout']['drop_prob']}")
             if methods["magnitude_warp"]["enabled"]:
                 aug_params.append(f"magWarpSigma-{methods['magnitude_warp']['sigma']}")
+                            # 类别平衡参数（新增）
+            cb = aug_cfg.get("class_balance", {}) or {}
+            if cb.get("enabled", False):
+                m = cb.get("multiplier", {})
+                aug_params.append(
+                    f"cb-L{m.get('low',1.0)}-M{m.get('medium',1.0)}-H{m.get('high',1.0)}"
+                )
 
         # 拼接参数并生成最终文件名
         param_suffix = "_".join(aug_params)
@@ -597,7 +718,7 @@ def main():
     do_aug = cfg["augmentation"].get("enabled", False)
 
     print("=" * 65)
-    print("MT-JP 联合预测模型 — 数据集构建")
+    print("MT-RP 联合预测模型 — 数据集构建")
     print(f"  历史长度:  T={seq_len} 步 × {win_sec}s = {history_s}s")
     print(f"  预测目标:  未来 {win_sec}s（下一步）")
     print(f"  zscore  :  {cfg['normalization']['zscore']}")
@@ -663,36 +784,35 @@ def main():
     yc_te = y_risk_cls[test_mask]
     meta_te = meta_df[test_mask].reset_index(drop=True)
 
-    # ── Step 4.5: 数据增强（在标准化前，仅对训练集）──────────
+# ── Step 4.5: 数据增强（在标准化前，仅对训练集）──────────
     if do_aug:
-        print("\n[AUG] 数据增强（Z-score 标准化前）...")
-        # 延迟导入，避免非增强模式也加载模块
-        from src.models.augment import Augmentor
-
         aug = Augmentor(cfg["augmentation"], seed=cfg["split"]["seed"])
-        # 保存原始训练集长度，用于后续meta扩充
-        orig_len = len(X_tr)
-        X_tr, ya_tr, yr_tr, yc_tr = aug.apply(X_tr, ya_tr, yr_tr, yc_tr, split="train")
-        # meta_tr 扩充（修复核心逻辑）
-        n_aug = len(ya_tr) - orig_len
-        if n_aug > 0:
-            # 方法1：为增强样本复制原始meta（循环填充至n_aug个）
-            aug_meta_rows = []
-            for i in range(n_aug):
-                # 循环取原始meta的行，保证每个增强样本都有对应meta
-                orig_idx = i % orig_len
-                aug_meta_rows.append(meta_tr.iloc[orig_idx].to_dict())
-            # 转为DataFrame并标记为增强样本
-            aug_meta_df = pd.DataFrame(aug_meta_rows)
-            aug_meta_df["augmented"] = True
-            # 原始样本标记为非增强
-            meta_tr["augmented"] = False
-            # 合并原始meta和增强meta
-            meta_tr = pd.concat([meta_tr, aug_meta_df], ignore_index=True)
-        print(f"    增强后训练集: X_tr={X_tr.shape}")
+
+        cb_cfg = cfg["augmentation"].get("class_balance", {}) or {}
+        use_class_balance = bool(cb_cfg.get("enabled", False))
+
+        if use_class_balance:
+            print("\n[AUG] 类别平衡增强（过采样中/高风险 → 与低风险均衡）...")
+            X_tr, ya_tr, yr_tr, yc_tr, meta_tr = class_balanced_augment(
+                X_tr, ya_tr, yr_tr, yc_tr, meta_tr, aug, cb_cfg
+            )
+            print(f"    增强后训练集: X_tr={X_tr.shape}")
+        else:
+            print("\n[AUG] 全局数据增强（不区分类别）...")
+            orig_len = len(X_tr)
+            X_tr, ya_tr, yr_tr, yc_tr = aug.apply(X_tr, ya_tr, yr_tr, yc_tr, split="train")
+            n_aug = len(ya_tr) - orig_len
+            if n_aug > 0:
+                aug_rows = [meta_tr.iloc[i % orig_len].to_dict() for i in range(n_aug)]
+                aug_meta_df = pd.DataFrame(aug_rows)
+                aug_meta_df["augmented"] = True
+                meta_tr = meta_tr.copy()
+                meta_tr["augmented"] = False
+                meta_tr = pd.concat([meta_tr, aug_meta_df], ignore_index=True)
+            print(f"    增强后训练集: X_tr={X_tr.shape}")
     else:
         print("\n[AUG] 数据增强已关闭，跳过")
-
+        
     # ── Step 5: 标准化 ─────────────────────────────────────────
     # 更新为18维特征名称列表
     feat_cols_18 = [

@@ -25,7 +25,7 @@
 - **模型验证**：与主观感知r=0.68-0.74，与异常事件r=0.73
 
 ### 4. 联合预测模型（第5章）
-- **MT-JP架构**：多模态Transformer，4层编码器×8头注意力
+- **MT-RP架构**：多模态Transformer，4层编码器×8头注意力
 - **双分支预测**：能力预测(R²=0.977) + 风险预测(R²=0.965)
 - **交叉注意力**：显式建模能力-风险耦合关系
 - **实时推理**：单样本3.7ms，满足实时预警需求
@@ -121,7 +121,7 @@ src/
 | 第2章 | data_processing | 数据同步、预处理、特征提取 |
 | 第3章 | capability_assessment | K-means++、AHP-熵权、动态能力 |
 | 第4章 | risk_assessment | DSF理论、TCI模型、风险度 |
-| 第5章 | prediction + models | MT-JP、Transformer、多任务学习 |
+| 第5章 | prediction + models | MT-RP、Transformer、多任务学习 |
 
 ## 扩展方向
 

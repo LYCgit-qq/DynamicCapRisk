@@ -9,12 +9,11 @@
 # 消融实验快速切换（仅对 model_type=mtrp 生效）：
 #
 #   model.ablation 可选值：
-#     none            → 完整 MT-JP（默认）
+#     none            → 完整 MT-RP（默认）
 #     no_cross_attn   → 移除交叉注意力（RiskBranch 改为线性层）
 #     single_modal    → 仅使用行为特征，跳过融合层
 #     early_fusion    → 早期融合（18维直接输入单一编码器）
 #     late_fusion     → 晚期融合（四路各自预测后均值融合）
-#
 
 # -------------------------- 路径配置 --------------------------
 paths:
@@ -23,29 +22,22 @@ paths:
 
 # -------------------------- 模型配置 --------------------------
 model:
-  # ── 模型选择（改此字段即可切换模型）──────────────────────────
-  model_type: "mtrp"           # 可选: mtrp | lstm | gru | cnn_lstm
-
-  # ── 消融实验开关（仅 model_type=mtrp 时生效）─────────────────
+  model_type: "cnn_lstm"
   ablation: "none"
+  seq_len:    5
+  input_dim:  18
+  n_classes:  3
+  dropout:    0.25
 
-  # ── 公共字段（所有模型均使用）────────────────────────────────
-  seq_len:    5            # 历史步数 T（必须与数据集一致）
-  input_dim:  18           # 输入特征维度 D=18
-  n_classes:  3            # 风险等级分类数 {低:0, 中:1, 高:2}
-  dropout:    0.2          # Dropout 率
+  # MT-RP 参数
+  d_model:    64
+  nhead:      4
+  num_layers: 2
+  ffn_dim:    256
 
-  # ── MT-JP 专用参数 ────────────────────────────────────────────
-  d_model:    128          # Transformer 隐藏维度
-  nhead:      8            # 多头注意力头数
-  num_layers: 4            # Transformer 编码器层数
-  ffn_dim:    512          # 前馈网络维度
-
-  # ── LSTM / GRU 基线参数 ───────────────────────────────────────
+  # 基线模型参数
   baseline_hidden:     128
   baseline_num_layers: 2
-
-  # ── CNN-LSTM 基线参数 ─────────────────────────────────────────
   baseline_cnn_channels: 64
   baseline_cnn_layers:   2
   baseline_kernel_size:  3
@@ -53,9 +45,9 @@ model:
 
 # -------------------------- 训练配置 --------------------------
 train:
-  batch_size:  1024
-  max_epochs:  600
-  patience:    150
+  batch_size:  256
+  max_epochs:  100
+  patience:    20
   grad_clip:   1.0
   seed:        42
   num_workers: 8
@@ -63,17 +55,17 @@ train:
 # -------------------------- 优化器配置 --------------------------
 optimizer:
   lr:           8.0e-4
-  weight_decay: 0.01
+  weight_decay: 0.05
   betas: [0.9, 0.999]
 
 # -------------------------- 学习率调度器 --------------------------
 scheduler:
-  T_0:     10              # 迭代加速，重启周期缩短
-  eta_min: 1.0e-6
+  type: "cosine"
+  T_max: 100
+  eta_min: 1.0e-5
 
 # -------------------------- 损失函数配置 --------------------------
-# 风险双任务损失：回归损失 + 分类损失
 loss:
-  lambda_risk_reg:    1.0    # 风险回归损失权重
-  lambda_risk_cls:    0.5    # 风险分类损失权重
-  cls_weights: [1.0, 1.5, 2.0]  # 分类类别权重
+  lambda_risk_reg: 1.0
+  lambda_risk_cls: 1.2
+  cls_weights: [1.0, 1.0, 1.0]

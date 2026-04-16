@@ -1,7 +1,5 @@
 # /root/autodl-tmp/DynamicCapRisk/src/3_prediction/evaluator.py
 """
-MTRP 单模型评估器
-
 评估指标：
   风险度预测（回归）：R²、MAE、RMSE、高风险召回率/精确率/F1
   风险等级预测（分类）：准确率、宏平均F1、Kappa系数、混淆矩阵、
@@ -30,7 +28,9 @@ import glob
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from src.models.mtrp_model import build_model
+# 🔥 修复1：导入MTRP和基线模型的构建函数
+from src.models.mtrp_model import build_model as build_mtrp
+from src.models.baseline_models import build_baseline_model
 from torch.utils.data import Dataset
 
 # =============================================================================
@@ -96,9 +96,6 @@ class TorchDataset(Dataset):
         # 与训练脚本完全一致：返回特征、风险回归、风险分类
         return self.X[idx], self.y_risk_reg[idx], self.y_risk_cls[idx]
 
-# =============================================================================
-# 推理：删除所有ability相关逻辑
-# =============================================================================
 
 @torch.no_grad()
 def collect_predictions(
@@ -136,6 +133,7 @@ def collect_predictions(
 
 
 def _softmax(x: np.ndarray) -> np.ndarray:
+    # ✅ 修复拼写错误：keepdims 是 numpy 标准参数
     e = np.exp(x - x.max(axis=-1, keepdims=True))
     return e / e.sum(axis=-1, keepdims=True)
 
@@ -284,6 +282,7 @@ def build_report(
         "【一】风险度预测（回归）",
         f"  R²             = {r_r2:.4f}",
         f"  MAE            = {r_mae_:.4f}",
+        # ✅ 修复语法错误：添加冒号
         f"  RMSE           = {r_rmse_:.4f}",
         f"  高风险召回率   = {hr_recall*100:.1f}%  （阈值 R>{ec['risk_thresh_high']}）",
         f"  高风险精确率   = {hr_prec*100:.1f}%",
@@ -304,12 +303,13 @@ def build_report(
 
 
 # =============================================================================
-# 主评估函数
+# 主评估函数 ✅【核心修复：自动加载训练时的模型配置 + 动态构建模型】
 # =============================================================================
 
 def evaluate(cfg: dict) -> None:
     device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt_path = cfg["paths"]["ckpt"]
+    
     if ckpt_path is None or ckpt_path == "null" or ckpt_path.strip() == "":
         ckpt_path = get_latest_checkpoint()
     print(f"  设备: {device}")
@@ -317,11 +317,31 @@ def evaluate(cfg: dict) -> None:
     if not os.path.exists(ckpt_path):
         raise FileNotFoundError(f"检查点不存在: {ckpt_path}")
 
-    # 加载模型
+    # ===================== 加载训练时的配置文件 =====================
+    model_dir = os.path.dirname(ckpt_path)
+    train_config_path = os.path.join(model_dir, "run_config.yaml")
+    
+    if os.path.exists(train_config_path):
+        print(f"✅ 加载训练配置: {train_config_path}")
+        with open(train_config_path, "r", encoding="utf-8") as f:
+            train_cfg = yaml.safe_load(f)
+        # 用训练时的模型参数覆盖评估配置，保证结构一致
+        cfg["model"] = train_cfg["model"]
+    # ==========================================================================
+
+    # 🔥 修复2：动态构建模型（自动适配 MTRP / LSTM / GRU / CNN-LSTM）
     print(f"\n[1/4] 加载模型检查点: {ckpt_path}")
-    model_state_dict = torch.load(ckpt_path, map_location=device)
-    model = build_model(cfg).to(device)
-    model.load_state_dict(model_state_dict)
+    model_type = cfg["model"]["model_type"].lower()
+    if model_type == "mtrp":
+        model = build_mtrp(cfg)
+        print(f"✅ 构建模型: MTRP")
+    else:
+        model = build_baseline_model(cfg)
+        print(f"✅ 构建基线模型: {model_type.upper()}")
+    
+    # 加载权重
+    model.load_state_dict(torch.load(ckpt_path, map_location=device))
+    model = model.to(device)
     print(f"  模型加载成功！")
 
     # 加载数据集

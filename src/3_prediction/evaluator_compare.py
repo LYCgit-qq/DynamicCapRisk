@@ -1,13 +1,13 @@
 # D:\Local\DynamicCapRisk\src\3_prediction\evaluator_compare.py
 
 """
-MT-JP 多模型横向对比评估器
+MT-RP 多模型横向对比评估器
 
 对比内容（论文 §5.3）：
   § 5.3.1  动态驾驶能力预测对比 → 表5.7（MAE / RMSE / R² / 训练时间 / 参数量）
   § 5.3.2  风险状态预测对比     → 表5.8（风险度MAE / R² / 分类准确率 / 高风险召回率 / 高风险F1）
 
-支持模型：SVR、CART、LSTM、GRU、CNN-LSTM、MT-JP
+支持模型：SVR、CART、LSTM、GRU、CNN-LSTM、MT-RP
 
 输出（保存至 output_dir）：
   comparison_ability.csv    能力预测对比表（对应表5.7）
@@ -91,7 +91,7 @@ _MODEL_TYPE_KEYWORDS = {
     "lstm":     ["lstm"],
     "gru":      ["gru"],
     "cnn_lstm": ["cnn_lstm", "cnnlstm"],
-    "mt_jp":    ["mtrp", "mt_jp", "mt-jp"],
+    "mt_jp":    ["mtrp", "mt_jp", "MT-RP"],
 }
 
 _DISPLAY_NAMES = {
@@ -100,7 +100,7 @@ _DISPLAY_NAMES = {
     "lstm":     "LSTM",
     "gru":      "GRU",
     "cnn_lstm": "CNN-LSTM",
-    "mt_jp":    "MT-JP",
+    "mt_jp":    "MT-RP",
 }
 
 _MODEL_ORDER = ["svr", "cart", "lstm", "gru", "cnn_lstm", "mt_jp"]
@@ -602,7 +602,7 @@ def compare_models(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="MT-JP 多模型横向对比评估器",
+        description="MT-RP 多模型横向对比评估器",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("-c", "--config",  type=str, default=None,
@@ -650,7 +650,7 @@ def main():
             param_counts_cli[k.strip().lower()] = v.strip()
 
     print("=" * 60)
-    print("MT-JP 联合预测模型 — 多模型横向对比评估器")
+    print("MT-RP 联合预测模型 — 多模型横向对比评估器")
     print(f"  数据集:   {cfg['paths']['dataset_pkl']}")
     print(f"  评估集:   {cfg['eval'].get('split', 'test')}")
     print(f"  输出目录: {cfg['paths']['output_dir']}")

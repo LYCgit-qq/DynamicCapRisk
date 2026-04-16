@@ -1,0 +1,138 @@
+[2026-04-16 21:30:24] ✅ 网格搜索启动！总实验次数：864
+[2026-04-16 21:30:24] 
+===== 开始第 1/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:30:26] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64
+[2026-04-16 21:30:26] 
+===== 开始第 2/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128 =====
+[2026-04-16 21:30:28] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128
+[2026-04-16 21:30:28] 
+===== 开始第 3/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64 =====
+[2026-04-16 21:30:30] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64
+[2026-04-16 21:30:30] 
+===== 开始第 4/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128 =====
+[2026-04-16 21:30:33] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128
+[2026-04-16 21:30:33] 
+===== 开始第 5/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:30:35] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64
+[2026-04-16 21:30:35] 
+===== 开始第 6/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128 =====
+[2026-04-16 21:30:37] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128
+[2026-04-16 21:30:37] 
+===== 开始第 7/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_64 =====
+[2026-04-16 21:30:39] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_64.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_64
+[2026-04-16 21:30:39] 
+===== 开始第 8/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_128 =====
+[2026-04-16 21:30:41] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', 'trainer_dl.py', '-c', './temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_128.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_128
+[2026-04-16 21:30:41] 
+===== 开始第 9/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:35:13] ✅ 网格搜索启动！总实验次数：864
+[2026-04-16 21:35:13] 
+===== 开始第 1/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:36:53] ✅ 实验成功！耗时：100.96s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64
+[2026-04-16 21:36:53] 
+===== 开始第 2/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128 =====
+[2026-04-16 21:42:04] ✅ 网格搜索启动！总实验次数：864
+[2026-04-16 21:42:04] 
+===== 开始第 1/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:42:06] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/trainer_dl.py', '-c', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64
+[2026-04-16 21:42:06] 
+===== 开始第 2/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128 =====
+[2026-04-16 21:42:08] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/trainer_dl.py', '-c', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128
+[2026-04-16 21:42:08] 
+===== 开始第 3/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64 =====
+[2026-04-16 21:42:11] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/trainer_dl.py', '-c', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64
+[2026-04-16 21:42:11] 
+===== 开始第 4/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128 =====
+[2026-04-16 21:42:13] ❌ 实验失败！错误：Command '['/root/miniconda3/bin/python', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/trainer_dl.py', '-c', '/root/autodl-tmp/DynamicCapRisk/src/3_prediction/temp_configs/temp_model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128.yaml']' returned non-zero exit status 1. | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128
+[2026-04-16 21:42:13] 
+===== 开始第 5/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:45:21] ✅ 网格搜索启动！总实验次数：864
+[2026-04-16 21:45:21] 
+===== 开始第 1/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:46:59] ✅ 实验成功！耗时：98.27s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64
+[2026-04-16 21:46:59] 
+===== 开始第 2/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128 =====
+[2026-04-16 21:48:53] ✅ 实验成功！耗时：113.68s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128
+[2026-04-16 21:48:53] 
+===== 开始第 3/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64 =====
+[2026-04-16 21:50:27] ✅ 实验成功！耗时：94.11s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64
+[2026-04-16 21:50:27] 
+===== 开始第 4/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128 =====
+[2026-04-16 21:52:19] ✅ 实验成功！耗时：112.45s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128
+[2026-04-16 21:52:19] 
+===== 开始第 5/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64 =====
+[2026-04-16 21:53:58] ✅ 实验成功！耗时：98.62s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64
+[2026-04-16 21:53:58] 
+===== 开始第 6/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128 =====
+[2026-04-16 21:55:43] ✅ 实验成功！耗时：105.4s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128
+[2026-04-16 21:55:43] 
+===== 开始第 7/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_64 =====
+[2026-04-16 21:57:19] ✅ 实验成功！耗时：95.29s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_64
+[2026-04-16 21:57:19] 
+===== 开始第 8/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_128 =====
+[2026-04-16 21:58:55] ✅ 实验成功！耗时：95.73s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.2_baseline_hidden_128_d_model_128
+[2026-04-16 21:58:55] 
+===== 开始第 9/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_64_d_model_64 =====
+[2026-04-16 22:00:31] ✅ 实验成功！耗时：96.2s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_64_d_model_64
+[2026-04-16 22:00:31] 
+===== 开始第 10/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_64_d_model_128 =====
+[2026-04-16 22:01:59] ✅ 实验成功！耗时：88.17s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_64_d_model_128
+[2026-04-16 22:01:59] 
+===== 开始第 11/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_128_d_model_64 =====
+[2026-04-16 22:03:36] ✅ 实验成功！耗时：96.76s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_128_d_model_64
+[2026-04-16 22:03:36] 
+===== 开始第 12/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_128_d_model_128 =====
+[2026-04-16 22:05:04] ✅ 实验成功！耗时：88.65s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.2_lambda_risk_cls_1.5_baseline_hidden_128_d_model_128
+[2026-04-16 22:05:04] 
+===== 开始第 13/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64 =====
+[2026-04-16 22:06:43] ✅ 实验成功！耗时：98.91s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64
+[2026-04-16 22:06:43] 
+===== 开始第 14/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128 =====
+[2026-04-16 22:07:57] ✅ 实验成功！耗时：73.86s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128
+[2026-04-16 22:07:57] 
+===== 开始第 15/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64 =====
+[2026-04-16 22:09:34] ✅ 实验成功！耗时：96.77s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64
+[2026-04-16 22:09:34] 
+===== 开始第 16/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128 =====
+[2026-04-16 22:10:47] ✅ 实验成功！耗时：73.11s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128
+[2026-04-16 22:10:47] 
+===== 开始第 17/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64 =====
+[2026-04-16 22:12:58] ✅ 实验成功！耗时：131.07s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64
+[2026-04-16 22:12:58] 
+===== 开始第 18/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128 =====
+[2026-04-16 22:14:38] ✅ 实验成功！耗时：100.4s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128
+[2026-04-16 22:14:38] 
+===== 开始第 19/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_128_d_model_64 =====
+[2026-04-16 22:16:49] ✅ 实验成功！耗时：130.77s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_128_d_model_64
+[2026-04-16 22:16:49] 
+===== 开始第 20/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_128_d_model_128 =====
+[2026-04-16 22:18:35] ✅ 实验成功！耗时：105.64s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.2_baseline_hidden_128_d_model_128
+[2026-04-16 22:18:35] 
+===== 开始第 21/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_64_d_model_64 =====
+[2026-04-16 22:20:10] ✅ 实验成功！耗时：95.48s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_64_d_model_64
+[2026-04-16 22:20:10] 
+===== 开始第 22/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_64_d_model_128 =====
+[2026-04-16 22:21:43] ✅ 实验成功！耗时：92.58s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_64_d_model_128
+[2026-04-16 22:21:43] 
+===== 开始第 23/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_128_d_model_64 =====
+[2026-04-16 22:23:22] ✅ 实验成功！耗时：99.5s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_128_d_model_64
+[2026-04-16 22:23:22] 
+===== 开始第 24/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_128_d_model_128 =====
+[2026-04-16 22:24:54] ✅ 实验成功！耗时：91.87s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.25_lambda_risk_cls_1.5_baseline_hidden_128_d_model_128
+[2026-04-16 22:24:54] 
+===== 开始第 25/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64 =====
+[2026-04-16 22:27:26] ✅ 实验成功！耗时：151.5s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_64_d_model_64
+[2026-04-16 22:27:26] 
+===== 开始第 26/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128 =====
+[2026-04-16 22:29:13] ✅ 实验成功！耗时：107.17s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_64_d_model_128
+[2026-04-16 22:29:13] 
+===== 开始第 27/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64 =====
+[2026-04-16 22:31:44] ✅ 实验成功！耗时：151.32s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_128_d_model_64
+[2026-04-16 22:31:44] 
+===== 开始第 28/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128 =====
+[2026-04-16 22:33:33] ✅ 实验成功！耗时：108.42s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.0_baseline_hidden_128_d_model_128
+[2026-04-16 22:33:33] 
+===== 开始第 29/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64 =====
+[2026-04-16 22:35:22] ✅ 实验成功！耗时：108.85s | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.2_baseline_hidden_64_d_model_64
+[2026-04-16 22:35:22] 
+===== 开始第 30/864 个实验 | model_type_mtrp_lr_0.0005_batch_size_128_dropout_0.3_lambda_risk_cls_1.2_baseline_hidden_64_d_model_128 =====

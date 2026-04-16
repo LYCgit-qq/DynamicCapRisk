@@ -1,6 +1,6 @@
 # /root/autodl-tmp/DynamicCapRisk/src/models/mtrp_model.py
 """
-MT-JP 风险预测模型（移除能力预测分支）
+MT-RP 风险预测模型（移除能力预测分支）
 Multimodal Transformer for Risk Prediction
 
 架构：
@@ -149,7 +149,7 @@ class RiskBranch(nn.Module):
 
 
 # =============================================================================
-# MT-JP 主模型（纯风险预测）
+# MT-RP 主模型（纯风险预测）
 # =============================================================================
 
 class mtrp(nn.Module):

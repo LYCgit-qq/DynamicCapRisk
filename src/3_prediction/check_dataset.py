@@ -43,7 +43,7 @@ def main():
     
     with open(txt_report_path, 'w', encoding='utf-8') as f:
         f.write("="*80 + "\n")
-        f.write("MT-JP 数据集检查报告\n")
+        f.write("MT-RP 数据集检查报告\n")
         f.write("="*80 + "\n\n")
         
         # --- 全局信息 ---

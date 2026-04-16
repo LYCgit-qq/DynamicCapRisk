@@ -1,5 +1,5 @@
-# D:\Local\DynamicCapRisk\config\dataset.yaml
-# MT-JP 联合预测模型 — 数据集构建配置
+# /root/autodl-tmp/DynamicCapRisk/config/dataset.yaml
+# MT-RP 联合预测模型 — 数据集构建配置
 
 # -------------------------- 路径配置 --------------------------
 paths:
@@ -36,46 +36,32 @@ normalization:
 # -------------------------- 数据增强配置 --------------------------
 # 增强时机：Z-score标准化前执行，仅作用于训练集，增强样本追加到原始训练集后
 augmentation:
-  enabled:       false      # 增强总开关（true=启用 / false=关闭）
+  enabled:       true       # 增强总开关【必须改为true】
   only_on_train: true     # 仅对训练集增强（val/test集始终不增强）
 
-  # 各增强方法配置（enabled=true才会生效）
+# -------------------------- 数据增强配置 --------------------------
+augmentation:
+  enabled:       false      # 打开总开关
+  only_on_train: true
+
+  # 类别平衡增强（针对风险分类标签 risk_cls）
+  class_balance:
+    enabled: true          # 是否启用类别平衡过采样
+    # 每类目标样本数 = 训练集中最多类的原始样本数 × multiplier
+    # 若 multiplier × max_count <= 该类原始数量，则该类不增强
+    multiplier:
+      low:    1          # 低风险 (risk_cls=0)，通常是多数类，保持 1.0
+      medium: 1          # 中风险 (risk_cls=1)，过采样到 max_count × 1.0
+      high:   1          # 高风险 (risk_cls=2)，过采样到 max_count × 1.0
+    max_rounds: 20         # 每类最多增强轮数（防死循环）
+
   methods:
-    # 1. 高斯噪声：模拟传感器随机误差
-    gaussian_noise:
-      enabled:   true
-      std_scale: 0.05     # 噪声强度：std = |特征均值| × 0.05
-      prob:      1.0      # 训练样本被选中增强的概率（1.0=所有样本都加噪声）
-
-    # 2. 时间扭曲：模拟驾驶行为的时间弹性变化
-    time_warp:
-      enabled:   true
-      sigma:     0.2      # 扭曲幅度（越大扭曲越强，建议0.1~0.3）
-      prob:      0.5      # 训练样本被选中扭曲的概率
-
-    # 3. 窗口裁剪：随机截取片段后插值回原长度（当前禁用）
-    window_slice:
-      enabled:   false
-      slice_ratio: 0.9    # 保留的时间步比例（0.9=保留90%）
-      prob:      0.3      # 训练样本被选中裁剪的概率
-
-    # 4. 特征随机置零：模拟传感器缺失/遮挡
-    feature_dropout:
-      enabled:   true
-      drop_prob: 0.1      # 单特征维度被置零的概率（仅前16维多模态特征，F_S不变）
-      prob:      0.5      # 训练样本被选中置零的概率
-
-    # 5. 幅值扭曲：模拟生理/行为的个体幅度差异
-    magnitude_warp:
-      enabled:   true
-      sigma:     0.1      # 缩放曲线抖动幅度（建议0.05~0.2）
-      prob:      0.5      # 训练样本被选中幅值扭曲的概率
-
-    # 6. Mixup：跨样本线性插值（当前禁用）
-    mixup:
-      enabled:   false
-      alpha:     0.4      # Beta分布参数（alpha=0.4时插值更平缓）
-      prob:      0.3      # 训练样本被选中mixup的概率
+    gaussian_noise:   { enabled: true,  std_scale: 0.05, prob: 1.0 }
+    time_warp:        { enabled: true,  sigma: 0.2,      prob: 0.5 }
+    window_slice:     { enabled: false, slice_ratio: 0.9, prob: 0.3 }
+    feature_dropout:  { enabled: true,  drop_prob: 0.1,  prob: 0.5 }
+    magnitude_warp:   { enabled: true,  sigma: 0.1,      prob: 0.5 }
+    mixup:            { enabled: false, alpha: 0.4,      prob: 0.3 }
 
 # -------------------------- 标签映射 --------------------------
 risk_level_map:

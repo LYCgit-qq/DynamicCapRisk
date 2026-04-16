@@ -87,7 +87,7 @@ DynamicCapRisk/
 - **等级划分**: 阈值敏感性分析（tci_model.py）
 
 ### 第5章：联合预测模型
-- **MT-JP架构**: Transformer编码器（mtrp_model.py）
+- **MT-RP架构**: Transformer编码器（mtrp_model.py）
 - **多模态融合**: 跨模态注意力（mtrp_model.py）
 - **损失函数**: 多任务学习 + 一致性约束（losses.py）
 - **模型训练**: AdamW + 余弦退火（trainer.py）
@@ -104,7 +104,7 @@ DynamicCapRisk/
 11项驾驶特征
   ├─→ [1_capability_assessment/] → 动态能力 Ad
   ├─→ [2_risk_assessment/] → 风险度 R, 风险等级
-  └─→ [3_prediction/] → MT-JP模型 → 预测结果
+  └─→ [3_prediction/] → MT-RP模型 → 预测结果
 ```
 
 ## 使用流程

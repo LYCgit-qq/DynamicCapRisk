@@ -1,0 +1,44 @@
+paths:
+  dataset_pkl: data/dataset/dataset_aug-False.pkl
+  runs_root: output/3_prediction/runs
+model:
+  model_type: mtrp
+  ablation: none
+  seq_len: 5
+  input_dim: 18
+  n_classes: 3
+  dropout: 0.25
+  d_model: 64
+  nhead: 4
+  num_layers: 2
+  ffn_dim: 256
+  baseline_hidden: 64
+  baseline_num_layers: 2
+  baseline_cnn_channels: 64
+  baseline_cnn_layers: 2
+  baseline_kernel_size: 3
+  baseline_lstm_hidden: 128
+train:
+  batch_size: 128
+  max_epochs: 100
+  patience: 20
+  grad_clip: 1.0
+  seed: 42
+  num_workers: 8
+optimizer:
+  lr: 0.0005
+  weight_decay: 0.05
+  betas:
+  - 0.9
+  - 0.999
+scheduler:
+  type: cosine
+  T_max: 100
+  eta_min: 1.0e-05
+loss:
+  lambda_risk_reg: 1.0
+  lambda_risk_cls: 1.5
+  cls_weights:
+  - 1.0
+  - 1.0
+  - 1.0
