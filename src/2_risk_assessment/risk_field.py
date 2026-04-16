@@ -501,15 +501,18 @@ def calculate_comprehensive_field(df: pd.DataFrame) -> pd.DataFrame:
     F_S = F_S.clip(0.0, 1.0)
 
     # ===================== F_S 分布后处理 =====================
-    # 极小幅度微调：仅抬升 0~0.02 的极小值，解决R=-1占比过高问题，幅度≤0.005
+    # 1. 极小幅度微调：解决 R=-1 问题
     if adjust_distribution:
         F_S = adjust_Fs_distribution(F_S, threshold=0.03, lift=0.03)
-    # ==========================================================================
+    
+    # 2. 分布重塑：解决两头翘问题
+    enable_tail_fix = CONFIG['calculation'].get('enable_tail_fix', True)
+    if enable_tail_fix:
+        F_S = fix_right_tail(F_S)
 
-    # ===================== F_S全局强制归一化 =====================
+    # 3. F_S全局强制归一化
     if force_norm_fs:
         F_S = force_normalize_FS(F_S)
-    # ======================================================================
 
     # 保存结果
     result['s_geo']       = s_geo
@@ -534,17 +537,6 @@ def calculate_comprehensive_field(df: pd.DataFrame) -> pd.DataFrame:
 def adjust_Fs_distribution(F_S: pd.Series, threshold: float = 0.02, lift: float = 0.005) -> pd.Series:
     """
     F_S 分布极小幅度后处理（仅解决R≈-1问题，不改变原有分布）
-    规则：
-    1. F_S ∈ [0, threshold) → 线性轻微抬升（幅度=lift）
-    2. F_S ≥ threshold → 完全不变
-    3. 保证平滑过渡，无阶跃，仍在[0,1]区间内
-    
-    Args:
-        F_S: 原始计算的场强序列
-        threshold: 触发微调的阈值（固定0.02，对应R≈-1的临界条件）
-        lift: 抬升幅度（默认0.005，极小幅度，满足你的要求）
-    Returns:
-        微调后的F_S序列
     """
     fs_values = F_S.values.copy()
     
@@ -557,6 +549,36 @@ def adjust_Fs_distribution(F_S: pd.Series, threshold: float = 0.02, lift: float 
     # 再次裁剪保证在[0,1]
     fs_values = np.clip(fs_values, 0.0, 1.0)
     return pd.Series(fs_values, index=F_S.index)
+
+# 分布重塑后处理 (Quantile Mapping)
+def fix_right_tail(F_S: pd.Series) -> pd.Series:
+    fs_values = F_S.values.copy()
+    threshold = 0.27
+    mask_left = fs_values <= threshold
+    mask_right = fs_values > threshold
+    n_right = np.sum(mask_right)
+    if n_right == 0:
+        return F_S
+    right_vals = fs_values[mask_right]
+    
+    sorted_indices = np.argsort(right_vals)
+    order_back = np.argsort(sorted_indices)
+    
+    max_target = 1.0
+    k = 2.0
+    
+    linear_space = np.linspace(0, 1, n_right)
+    nonlinear_space = linear_space ** k
+    
+    # 核心修改：倒序映射 + 从右往左填
+    # 原来最大的值 -> 靠近 threshold
+    # 原来最小的值 -> 靠近 max_target
+    new_right_vals = max_target - (max_target - threshold) * nonlinear_space
+    
+    final_right_vals = new_right_vals[order_back]
+    final_values = fs_values.copy()
+    final_values[mask_right] = final_right_vals
+    return pd.Series(final_values, index=F_S.index)
 
 # =============================================================================
 # 统计 / 场景处理

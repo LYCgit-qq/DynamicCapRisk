@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple
 from src.visualization.plot_risk import (
     plot_threshold_f1, plot_r_histogram, plot_violin_by_group,
     plot_line_scenario_group, plot_box_scenario_group, plot_stacked_bar_risk,
-    plot_timeseries_typical, plot_single_sample, plot_fs_ad_filled
+    plot_timeseries_typical, plot_single_sample, plot_fs_ad_filled, plot_r_histogram_dual
 )
 
 warnings.filterwarnings('ignore')
@@ -90,25 +90,73 @@ def resample_1d(arr: np.ndarray, target_len: int) -> np.ndarray:
 
 def map_spatial_to_temporal(field_labels: np.ndarray,
                              spatial_fs: Dict[int, np.ndarray],
-                             fs_baseline: float) -> np.ndarray:
+                             fs_baseline: float = None) -> np.ndarray:
     """
     游程编码逐片段映射：
-      label=0 → fs_baseline
-      label!=0 → 对应空间序列 interp 到片段长度
+      1. 先将所有非0标签路段完成空间FS→时间窗口映射
+      2. fs_baseline=None/null/none时：用【映射后】非0路段的最小FS + 逐帧独立扰动填充0标签路段
+      3. fs_baseline=数值时：固定基准值 + 逐帧独立扰动填充0标签路段
+      4. 负值直接取反，不截断
     """
-    n  = len(field_labels)
-    fs = np.full(n, fs_baseline, dtype=float)
-    i  = 0
+    # 加固：兼容字符串 'none' → 转为 None
+    if isinstance(fs_baseline, str) and fs_baseline.lower() == 'none':
+        fs_baseline = None
+        
+    n = len(field_labels)
+    # 1. 初始化数组
+    fs = np.zeros(n, dtype=float)
+    i = 0
+
+    # 第一步：先完成所有非0路段的映射
     while i < n:
         lbl = int(field_labels[i])
-        j   = i + 1
+        j = i + 1
+        # 找到连续相同标签的区间 [i, j)
         while j < n and int(field_labels[j]) == lbl:
             j += 1
+        # 非0路段：执行空间FS→时间窗口的插值映射
         if lbl != 0:
             fs[i:j] = resample_1d(spatial_fs.get(lbl, np.array([np.nan])), j - i)
         i = j
-    return fs
 
+    # ===================== 第二步：0段 逐帧独立扰动（核心修改） =====================
+    # 统一参数
+    base_offset = 0.0
+    noise_range = (-0.006, 0.006)
+    zero_mask = field_labels == 0
+    zero_count = np.sum(zero_mask)  # 0段总时间帧数
+
+    # 仅当存在0段时处理
+    if zero_count > 0:
+        # 1. 计算0段的基准值（无噪声）
+        if fs_baseline is None:
+            # 自动基线：取非0路段最小值
+            non_zero_mask = field_labels != 0
+            valid_non_zero_fs = fs[non_zero_mask][np.isfinite(fs[non_zero_mask])]
+            if len(valid_non_zero_fs) > 0:
+                base_val = np.min(valid_non_zero_fs)
+            else:
+                base_val = 0.02  # 兜底
+        else:
+            # 固定基线：使用配置的数值
+            base_val = float(fs_baseline)
+
+        # 2. 🔥 关键：为0段【每个时间帧生成独立的随机噪声】（长度=0段帧数）
+        frame_wise_noise = np.random.uniform(*noise_range, size=zero_count)
+        
+        # 3. 逐帧计算：基准值 + 偏移 + 独立噪声
+        zero_fs_values = base_val + base_offset + frame_wise_noise
+        
+        # 4. 负值取反
+        zero_fs_values = np.abs(zero_fs_values)
+        
+        # 5. 赋值到0段的每个时间帧（每个位置扰动都不同）
+        fs[zero_mask] = zero_fs_values
+
+    # 全局负值统一取反
+    fs = np.abs(fs)
+
+    return fs
 
 # =============================================================================
 # 核心计算：只算原始值，归一化全部移到全局统一处理
@@ -429,7 +477,7 @@ def update_risk_level_with_optimal_theta(all_windows: pd.DataFrame, best_theta: 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='TCI 风险度评估（全局统一归一化版）',
+        description='TCI 风险度评估（全局统一处理版）',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
@@ -446,7 +494,6 @@ def main():
                         help='配置文件路径')
     parser.add_argument('--method', type=str, choices=['tci', 'linear'],
                         help='强制指定计算方法：tci=论文模型 | linear=原线性模型，覆盖配置文件')
-    # 【恢复】force_normalize_r 开关
     parser.add_argument('--force-normalize-r', action='store_true', default=None,
                         help='强制将R值全局Min-Max归一化到[0,1]')
     parser.add_argument('--no-force-normalize-r', action='store_true', default=None,
@@ -462,12 +509,15 @@ def main():
     if args.method is not None:
         cfg['model']['method'] = args.method
     
-    # 【恢复】读取并覆盖 force_normalize_r 配置
+    # 读取配置
     force_norm = cfg['model']['force_normalize_r']
     if args.force_normalize_r is True:
         force_norm = True
-    if args.no_force_normalize_r is True:
-        force_norm = False
+        
+    # 读取阈值开关 + 固定阈值
+    use_fixed_threshold = cfg['model']['use_fixed_threshold']
+    fixed_thresh_low = cfg['model']['thresh_low']
+    fixed_thresh_high = cfg['model']['thresh_high']
         
     method = cfg['model']['method']
     csv_dir = cfg['paths']['output_csv']
@@ -476,9 +526,10 @@ def main():
     os.makedirs(fig_dir, exist_ok=True)
 
     print("=" * 60)
-    print("TCI 风险度评估（已修复：全局统一处理）")
+    print("TCI 风险度评估（全局统一处理）")
     print(f"  当前计算方法: 【{method.upper()}】")
     print(f"  R全局归一化[0,1]: 【{'开启' if force_norm else '关闭'}】")
+    print(f"  使用固定阈值: 【{use_fixed_threshold}】")
     print(f"  CSV 输出: {csv_dir}")
     print(f"  图片输出: {fig_dir}")
     print("=" * 60)
@@ -491,7 +542,7 @@ def main():
         raise ValueError(f"样本数不一致: field={len(sample_field)}, ad={len(sample_ad)}")
     print(f"  样本数: {len(sample_field)}")
 
-    # 【全局关键】计算所有样本 A_d 的全局 min/max
+    # 计算所有样本 A_d 的全局 min/max
     all_ad_flat = np.concatenate([ad for ad in sample_ad if len(ad) > 0])
     global_ad_min = all_ad_flat.min()
     global_ad_max = all_ad_flat.max()
@@ -501,8 +552,8 @@ def main():
     print("\n[2/5] 加载空间 F_S...")
     spatial_fs = load_spatial_fs(cfg)
 
-    # 3. 逐样本计算（只算原始值）
-    print(f"\n[3/5] 计算风险度（方法：{method}）...")
+    # 3. 逐样本计算风险值
+    print(f"\n[3/5] 计算原始风险值（方法：{method}）...")
     all_dfs = []
     sum_rows = []
     fs_temp_list = []
@@ -538,32 +589,54 @@ def main():
     all_windows = pd.concat(all_dfs, ignore_index=True)
     summary_df = pd.DataFrame(sum_rows)
 
-    print("\n[全局处理] 风险值R处理...")
+    # 4. 全局统一处理 R 值（归一化）
+    print("\n[4/5] 全局处理风险值 R...")
     if force_norm:
         global_R_min = all_windows['R_raw'].min()
         global_R_max = all_windows['R_raw'].max()
-
         if global_R_max == global_R_min:
             all_windows['R'] = 0.0
         else:
             all_windows['R'] = (all_windows['R_raw'] - global_R_min) / (global_R_max - global_R_min)
-
         all_windows['R'] = all_windows['R'].round(4)
         print(f"  全局R归一化完成：原始[{global_R_min:.4f}, {global_R_max:.4f}] → [0,1]")
     else:
-        # 关闭归一化：直接使用原始R值
         all_windows['R'] = all_windows['R_raw']
         print(f"  已关闭R归一化，使用原始R值")
 
-    # 4. 能力分组
-    print("\n[4/5] 能力分组...")
+    # 5. 计算最终阈值（固定 / 自动70/95分位）
+    print(f"\n[5/5] 阈值配置与风险等级划分...")
+    try:
+        if not use_fixed_threshold:
+            R_values = all_windows['R'].dropna()
+            auto_thresh_low = round(np.percentile(R_values, 70), 2)
+            auto_thresh_high = round(np.percentile(R_values, 95), 2)
+            final_thresh_low, final_thresh_high = auto_thresh_low, auto_thresh_high
+            print(f"  ✅ 使用数据70/95分位自动阈值：低={auto_thresh_low}, 高={auto_thresh_high}")
+        else:
+            final_thresh_low, final_thresh_high = fixed_thresh_low, fixed_thresh_high
+            print(f"  ✅ 使用YAML固定阈值：低={fixed_thresh_low}, 高={fixed_thresh_high}")
+    except Exception as e:
+        final_thresh_low, final_thresh_high = fixed_thresh_low, fixed_thresh_high
+        print(f"  阈值计算失败，回退固定阈值：{e}")
+
+    # 统一划分风险等级（核心修复：使用正确的 R 列）
+    all_windows['risk_level'] = assign_risk_level(
+        all_windows['R'].values, 
+        final_thresh_high, 
+        final_thresh_low
+    )
+    all_windows['risk_level_optimized'] = all_windows['risk_level']
+    best_theta = (final_thresh_low, final_thresh_high)
+
+    # 6. 能力分组
+    print("\n[6/6] 能力分组与结果保存...")
     cap_groups = assign_capability_groups(sample_ad)
     all_windows['group'] = all_windows['sample_idx'].map(cap_groups).fillna('中能力组')
     for g, n in all_windows['group'].value_counts().items():
         print(f"  {g}: {n} 窗口")
 
-    # 5. 保存结果
-    print("\n[5/5] 保存结果与生成图表...")
+    # 保存结果
     all_windows.to_csv(os.path.join(csv_dir, 'risk_windows_all.csv'),
                        index=False, encoding='utf-8-sig')
     summary_df.to_csv(os.path.join(csv_dir, 'risk_summary_by_sample.csv'),
@@ -573,70 +646,52 @@ def main():
         pickle.dump(risk_list, f)
     print(f"  风险序列列表 → {risk_pkl_path}")
     print(f"  全体窗口明细 → risk_windows_all.csv  ({len(all_windows)} 行)")
-    print(f"  样本级汇总   → risk_summary_by_sample.csv")
+
+    # 保存最优阈值
+    save_optimal_threshold(best_theta, 0.0, csv_dir)
 
     # 权重校准
     try:
         compute_weight_calibration(all_windows, cfg, csv_dir)
-    except ImportError:
-        print("  ⚠️  sklearn 未安装，跳过权重校准")
-
-    # 阈值敏感性分析
-    try:
-        best_theta, best_f1, threshold_df = threshold_sensitivity_analysis(all_windows, cfg, csv_dir)
-        save_optimal_threshold(best_theta, best_f1, csv_dir)
-        all_windows = update_risk_level_with_optimal_theta(all_windows, best_theta)
-        all_windows.to_csv(os.path.join(csv_dir, 'risk_windows_all_optimized.csv'),
-                           index=False, encoding='utf-8-sig')
-        print(f"   最优阈值风险等级 → risk_windows_all_optimized.csv")
     except Exception as e:
-        print(f"⚠️ 阈值敏感性分析失败: {e}")
+        print(f"  ⚠️  权重校准失败: {e}")
 
     # 论文表格
-    table45 = save_table_scenario_group(all_windows, cfg, csv_dir)
-    save_table_risk_level_dist(all_windows, cfg, csv_dir)
-    save_r_interval_distribution(all_windows, cfg, csv_dir)
+    try:
+        table45 = save_table_scenario_group(all_windows, cfg, csv_dir)
+        save_table_risk_level_dist(all_windows, cfg, csv_dir)
+        save_r_interval_distribution(all_windows, cfg, csv_dir)
+    except Exception as e:
+        print(f"  ⚠️  表格生成失败: {e}")
 
     # 绘图
     try:
-        plot_threshold_f1(all_windows, cfg, fig_dir)
-    except ImportError:
-        print("  ⚠️  sklearn 未安装，跳过 Fig4.5")
-
-    plot_r_histogram(all_windows, cfg, fig_dir, best_theta)
-    plot_violin_by_group(all_windows, cfg, fig_dir, best_theta)
-    plot_line_scenario_group(table45, cfg, fig_dir)
-    plot_box_scenario_group(all_windows, cfg, fig_dir)
-    plot_stacked_bar_risk(all_windows, cfg, fig_dir)
-    plot_timeseries_typical(all_windows, sample_field, ad_norm_list, fs_temp_list,
-                             cap_groups, cfg, fig_dir, best_theta)
-
-    # 指定样本绘图
-    if args.plot_sample is not None:
-        idx = args.plot_sample
-        if 0 <= idx < len(sample_field):
-            plot_single_sample(idx, sample_field, fs_temp_list, ad_norm_list,
-                                all_windows, cfg, fig_dir, best_theta)
-            plot_fs_ad_filled(idx, fs_temp_list[idx], ad_norm_list[idx], cfg, fig_dir)
+        non_baseline_windows = all_windows[all_windows['field_label'] != 0].copy()
+        if not non_baseline_windows.empty:
+            plot_r_histogram_dual(all_windows, non_baseline_windows, cfg, fig_dir, best_theta)
         else:
-            print(f"⚠️  --plot_sample {idx} 超出范围（共 {len(sample_field)} 个）")
+            plot_r_histogram(all_windows, cfg, fig_dir, best_theta)
+            
+        plot_violin_by_group(all_windows, cfg, fig_dir, best_theta)
+        plot_stacked_bar_risk(all_windows, cfg, fig_dir)
+    except Exception as e:
+        print(f"  ⚠️  绘图失败: {e}")
 
     # 整体统计
     total = len(all_windows)
-    lc = all_windows['risk_level_optimized'].value_counts()
+    lc = all_windows['risk_level'].value_counts()
     print(f"\n{'='*60}")
-    print("整体统计（优化后风险等级）")
+    print("整体统计（最终风险等级）")
     print(f"{'='*60}")
     print(f"  计算方法: {method}")
-    print(f"  R全局归一化: {'开启' if force_norm else '关闭'}")
-    print(f"  有效窗口: {total}  R 均值={all_windows['R'].mean():.4f}  std={all_windows['R'].std():.4f}")
+    print(f"  阈值模式: {'固定阈值' if use_fixed_threshold else '自动分位阈值'}")
+    print(f"  最终阈值: 低<{final_thresh_low} | 中[{final_thresh_low},{final_thresh_high}) | 高≥{final_thresh_high}")
+    print(f"  有效窗口: {total}")
     for lvl in ['高风险', '中风险', '低风险']:
         n = lc.get(lvl, 0)
-        print(f"  {lvl}: {n:>6} 窗口 ({n/total*100:5.1f}%)")
-    print(f"\n  结果 CSV → {csv_dir}")
-    print(f"  图  片   → {fig_dir}")
+        print(f"  {lvl}: {n:>6} 窗口 ({n/total*100:.1f}%)")
+    print(f"  结果 CSV → {csv_dir}")
     print("=" * 60)
-
 
 if __name__ == '__main__':
     main()

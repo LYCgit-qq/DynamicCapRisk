@@ -118,17 +118,18 @@ def load_capability(pkl_path: str) -> dict:
 
 
 def load_risk(csv_path: str) -> pd.DataFrame:
-    """加载 risk_windows_all.csv，提取每窗口的 R_star / risk_level / F_S / field_label。"""
+    """加载 risk_windows_all.csv，提取每窗口的 R / risk_level / F_S / field_label。"""
     if not os.path.exists(csv_path):
         raise FileNotFoundError(
             f"风险评估结果不存在: {csv_path}\n"
             "请先运行 risk_evaluator.py 生成 risk_windows_all.csv"
         )
     df = pd.read_csv(csv_path, encoding="utf-8-sig")
+    # 修复：R_star → R
     required = {
         "sample_idx",
         "window_idx",
-        "R_star",
+        "R",
         "risk_level",
         "F_S",
         "field_label",
@@ -138,7 +139,7 @@ def load_risk(csv_path: str) -> pd.DataFrame:
         raise ValueError(f"risk_windows_all.csv 缺少列: {missing}")
     print(
         f"  风险评估加载：{len(df)} 行，"
-        f"R ∈ [{df['R_star'].min():.3f}, {df['R_star'].max():.3f}]"
+        f"R ∈ [{df['R'].min():.3f}, {df['R'].max():.3f}]"
     )
     return df
 
@@ -165,15 +166,14 @@ def extract_window_features_single(
     win_phy: int,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
     """
-    对单个样本提取逐窗口特征向量，维度对齐论文 §5.1：
-      行为 8 维：steering_angle, steering_velocity, brake_pedal, throttle_pedal,
-                 longitudinal_accel, lateral_offset, lateral_accel, vehicle_speed
-      眼动 3 维：blink_frequency, gaze_x, gaze_y
-      生理 5 维：bvp, ecg, resp, hr, hrv
-      合计 16 维（F_S 来自 risk_csv，后续拼接为第 17 维）
+    对单个样本提取逐窗口特征向量，适配 raw_data_17.pkl 结构：
+      行为 8 维：[0-7] 全部保留（其中 8 是路段类型，单独提取为 field_label，不再算入act_feat）
+      眼动 5 维：[0-4] 全部保留
+      生理 4 维：[0-3] 全部保留
+      合计 17 维（F_S 来自 risk_csv，后续拼接为第 18 维）
 
     Returns:
-        feat_arr : (n_windows, 16) float32
+        feat_arr : (n_windows, 17) float32
         field_arr: (n_windows,) int
     """
     act = np.asarray(act, dtype=float)
@@ -184,7 +184,11 @@ def extract_window_features_single(
     if n_win == 0:
         return None, None
 
-    act_other = _sliding_window_mean(act[:, :-1], win_act)  # (n_win, 9)
+    # act: 9维 (0-8)，其中 8 是路段类型
+    # 提取前8维特征 (0-7)
+    act_feat = _sliding_window_mean(act[:, :-1], win_act)  # (n_win, 8)
+    
+    # 提取路段类型 (众数投票)
     act_reshaped = act[: n_win * win_act, -1].reshape(n_win, win_act).astype(int)
     field_arr = np.array(
         [
@@ -196,39 +200,43 @@ def extract_window_features_single(
         dtype=int,
     )
 
-    eye_win = _sliding_window_mean(eye, win_eye)
-    phy_win = _sliding_window_mean(phy, win_phy)
+    # eye: 5维 (0-4)，全部保留
+    eye_feat = _sliding_window_mean(eye, win_eye)  # (n_win, 5)
 
-    n_min = min(n_win, len(eye_win), len(phy_win))
+    # phy: 4维 (0-3)，全部保留
+    phy_feat = _sliding_window_mean(phy, win_phy)  # (n_win, 4)
+
+    n_min = min(n_win, len(eye_feat), len(phy_feat))
     if n_min == 0:
         return None, None
 
-    act_w = act_other[:n_min]
-    eye_w = eye_win[:n_min]
-    phy_w = phy_win[:n_min]
+    # 截断对齐
+    act_w = act_feat[:n_min]
+    eye_w = eye_feat[:n_min]
+    phy_w = phy_feat[:n_min]
     field_w = field_arr[:n_min]
 
-    steer_angle = np.abs(act_w[:, 2])
-    steer_vel = np.abs(np.diff(steer_angle, prepend=steer_angle[0]) / 3.0)
-    brake = np.abs(act_w[:, 1])
-    throttle = np.abs(act_w[:, 0])
-    lon_acc = np.abs(act_w[:, 4])
-    lat_off = np.abs(act_w[:, 8])
-    lat_acc = np.abs(act_w[:, 5])
-    speed = act_w[:, 3]
+    # -------------------------- 后处理（按README要求取绝对值） --------------------------
+    # Act 模块：0,1,2,3,5,6,7 取绝对值；4 (车速) 保留原值
+    act_w[:, 0] = np.abs(act_w[:, 0])  # 方向盘转角
+    act_w[:, 1] = np.abs(act_w[:, 1])  # 方向盘角速度
+    act_w[:, 2] = np.abs(act_w[:, 2])  # 加速踏板
+    act_w[:, 3] = np.abs(act_w[:, 3])  # 制动踏板
+    # act_w[:, 4] = 车速，保持不变
+    act_w[:, 5] = np.abs(act_w[:, 5])  # 纵向加速度
+    act_w[:, 6] = np.abs(act_w[:, 6])  # 横向加速度
+    act_w[:, 7] = np.abs(act_w[:, 7])  # 相对理想路径偏移量
 
-    behavior = np.stack(
-        [steer_angle, steer_vel, brake, throttle, lon_acc, lat_off, lat_acc, speed],
-        axis=1,
-    )
+    # Eye 模块：保持原样 (README未要求对窗口均值再次处理)
+    # 注意：原始数据中已包含绝对值处理，这里仅做均值
+    
+    # Phy 模块：1 (HRV) 取绝对值
+    phy_w[:, 1] = np.abs(phy_w[:, 1])
 
-    eye_feat = eye_w[:, :3] if eye_w.shape[1] >= 3 else np.zeros((n_min, 3))
-
-    phy_feat = phy_w[:, :5].copy() if phy_w.shape[1] >= 5 else np.zeros((n_min, 5))
-    if phy_w.shape[1] >= 5:
-        phy_feat[:, 4] = np.abs(phy_feat[:, 4])
-
-    feat_arr = np.concatenate([behavior, eye_feat, phy_feat], axis=1).astype(np.float32)
+    # -------------------------- 拼接 (17维) --------------------------
+    # 顺序: Act(8) + Eye(5) + Phy(4)
+    feat_arr = np.concatenate([act_w, eye_w, phy_w], axis=1).astype(np.float32)
+    
     return feat_arr, field_w
 
 
@@ -248,10 +256,10 @@ def build_per_window_table(
     """
     对每个样本、每个窗口，组装：
       sample_idx, window_idx, field_label,
-      feat_00..feat_15  (16 维多模态特征),
-      F_S               (来自 risk_csv，第 17 维),
+      feat_00..feat_16  (17 维多模态特征),
+      F_S               (来自 risk_csv，第 18 维),
       ad_norm           (归一化能力，标签),
-      R_star            (风险度回归标签),
+      R                 (风险度回归标签),
       risk_cls          (风险分类标签 0/1/2)
     """
     w = cfg["window"]
@@ -290,7 +298,8 @@ def build_per_window_table(
 
             rrow = risk_dict[key]
             fs_val = float(rrow.F_S)
-            r_star = float(rrow.R_star)
+            # 修复：R_star → R
+            r_star = float(rrow.R)
             rl_str = str(rrow.risk_level)
             risk_cls = int(rl_map.get(rl_str, 1))
 
@@ -305,7 +314,7 @@ def build_per_window_table(
                 "field_label": int(field_arr[widx]),
                 "F_S": round(fs_val, 4),
                 "ad_norm": round(ad_val, 4),
-                "R_star": round(r_star, 4),
+                "R": round(r_star, 4),
                 "risk_cls": risk_cls,
             }
             for fi, fv in enumerate(feat_row):
@@ -334,17 +343,17 @@ def build_sequences(
       - 输入 X    : 窗口 [t-seq_len+1 .. t]（共 seq_len 步，即 seq_len×3s = 15s 历史）
       - 预测目标  : 窗口 t+1（未来 3s）
 
-    特征维度 D = 16 (多模态) + 1 (F_S) = 17
+    特征维度 D = 17 (多模态) + 1 (F_S) = 18
 
     Returns:
-        X          : (N, seq_len, 17)   float32   历史输入
+        X          : (N, seq_len, 18)   float32   历史输入
         y_ability  : (N,)               float32   未来步 Ã_d
         y_risk_reg : (N,)               float32   未来步 R
         y_risk_cls : (N,)               int64     未来步风险等级
         meta_df    : (N, 3)             sample_idx / window_idx(目标步) / field_label(目标步)
     """
     feat_cols = sorted([c for c in window_df.columns if c.startswith("feat_")])
-    all_feat_cols = feat_cols + ["F_S"]  # 17 维
+    all_feat_cols = feat_cols + ["F_S"]  # 18 维
 
     X_list, ya_list, yr_list, yc_list, meta_list = [], [], [], [], []
 
@@ -356,7 +365,8 @@ def build_sequences(
 
         feat_mat = grp[all_feat_cols].to_numpy(dtype=np.float32)
         ya_arr = grp["ad_norm"].to_numpy(dtype=np.float32)
-        yr_arr = grp["R_star"].to_numpy(dtype=np.float32)
+        # 修复：R_star → R
+        yr_arr = grp["R"].to_numpy(dtype=np.float32)
         yc_arr = grp["risk_cls"].to_numpy(dtype=np.int64)
         fl_arr = grp["field_label"].to_numpy(dtype=np.int32)
         wi_arr = grp["window_idx"].to_numpy(dtype=np.int32)
@@ -458,12 +468,14 @@ def zscore_normalize(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     对特征维度 D 做 Z-score 标准化，μ/σ 仅从训练集计算。
-    F_S（第 17 维，索引 16）已归一化至 [0,1]，不参与标准化。
+    F_S（第 18 维，索引 17）已归一化至 [0,1]，不参与标准化。
     """
     _, _, D = X_train.shape
     X_tr_flat = X_train.reshape(-1, D)
     mu = X_tr_flat.mean(axis=0)
     sigma = X_tr_flat.std(axis=0) + 1e-8
+    
+    # 锁定最后一维 (F_S) 不标准化
     mu[-1] = 0.0
     sigma[-1] = 1.0
 
@@ -482,7 +494,7 @@ def save_dataset(
     splits: Dict,
     mu: np.ndarray,
     sigma: np.ndarray,
-    feat_cols_17: List[str],
+    feat_cols_18: List[str],
     output_pkl: str,
     output_stats: str,
 ) -> None:
@@ -494,7 +506,7 @@ def save_dataset(
         "val": splits["val"],
         "test": splits["test"],
         "norm": {"mu": mu, "sigma": sigma},
-        "feature_names": feat_cols_17,
+        "feature_names": feat_cols_18,
     }
     with open(output_pkl, "wb") as f:
         pickle.dump(payload, f)
@@ -502,7 +514,7 @@ def save_dataset(
 
     stats_df = pd.DataFrame(
         {
-            "feature": feat_cols_17,
+            "feature": feat_cols_18,
             "train_mean": mu.tolist(),
             "train_std": sigma.tolist(),
         }
@@ -604,7 +616,7 @@ def main():
     print("\n[1/6] 加载原始多模态数据...")
     act_list, eye_list, phy_list = load_raw(
         cfg["paths"]["raw_pkl"],
-        cfg.get("n_samples", None),  # 兼容 YAML 中可能的缺失，或直接改为 None
+        cfg.get("n_samples", None),
     )
 
     print("\n[2/6] 加载能力评估结果...")
@@ -690,24 +702,30 @@ def main():
         print("\n[AUG] 数据增强已关闭，跳过")
 
     # ── Step 5: 标准化 ─────────────────────────────────────────
-    feat_cols_17 = [
-        "steer_angle",
-        "steer_vel",
-        "brake",
-        "throttle",
-        "lon_acc",
-        "lat_off",
-        "lat_acc",
-        "speed",  # 行为 8 维
-        "blink_freq",
-        "gaze_x",
-        "gaze_y",  # 眼动 3 维
-        "bvp",
-        "ecg",
-        "resp",
-        "hr",
-        "hrv",  # 生理 5 维
-        "F_S",  # 环境 1 维
+    # 更新为18维特征名称列表
+    feat_cols_18 = [
+        # --- Act 8维 ---
+        "act_steer_angle",    # 0
+        "act_steer_vel",      # 1
+        "act_throttle",       # 2
+        "act_brake",          # 3
+        "act_speed",          # 4
+        "act_lon_acc",        # 5
+        "act_lat_acc",        # 6
+        "act_lat_off",        # 7
+        # --- Eye 5维 ---
+        "eye_gaze_x",         # 8
+        "eye_gaze_y",         # 9
+        "eye_blink_freq",     # 10
+        "eye_blink_freq_rep", # 11
+        "eye_dispersion",     # 12
+        # --- Phy 4维 ---
+        "phy_hr_mean",        # 13
+        "phy_hrv",            # 14
+        "phy_bvp",            # 15
+        "phy_resp",           # 16
+        # --- F_S 1维 ---
+        "F_S",                # 17
     ]
 
     if cfg["normalization"]["zscore"]:
@@ -746,7 +764,7 @@ def main():
         splits,
         mu,
         sigma,
-        feat_cols_17,
+        feat_cols_18,
         cfg["paths"]["output_pkl"],
         cfg["paths"]["output_stats"],
     )
@@ -755,23 +773,36 @@ def main():
     print(f"\n{'='*65}")
     print("数据集构建完成")
     print(f"{'='*65}")
+    
+    total_n, total_n0, total_n1, total_n2 = 0, 0, 0, 0
+    
     for split_name, sp in splits.items():
         n = len(sp["y_ability"])
         n0 = int((sp["y_risk_cls"] == 0).sum())
         n1 = int((sp["y_risk_cls"] == 1).sum())
         n2 = int((sp["y_risk_cls"] == 2).sum())
+        
+        # 累加总数
+        total_n += n
+        total_n0 += n0
+        total_n1 += n1
+        total_n2 += n2
+        
         print(
             f"  {split_name:5s}  N={n:6d}  "
             f"低风险={n0:5d}({n0/max(n,1)*100:4.1f}%)  "
             f"中风险={n1:5d}({n1/max(n,1)*100:4.1f}%)  "
             f"高风险={n2:5d}({n2/max(n,1)*100:4.1f}%)"
         )
-    print(f"\n  输入维度:  X = (N, T={seq_len}, D=17)  [{history_s}s 历史]")
-    print(f"  预测目标:  y_*(N,)  对应未来 {win_sec}s 窗口")
-    print(f"  标签类型:  y_ability(float32) / y_risk_reg(float32) / y_risk_cls(int64)")
-    print(f"  输出目录:  {os.path.dirname(cfg['paths']['output_pkl'])}")
-    print("=" * 65)
-
+    
+    # 打印总计行
+    print("  " + "-"*63)
+    print(
+        f"  Total  N={total_n:6d}  "
+        f"低风险={total_n0:5d}({total_n0/max(total_n,1)*100:4.1f}%)  "
+        f"中风险={total_n1:5d}({total_n1/max(total_n,1)*100:4.1f}%)  "
+        f"高风险={total_n2:5d}({total_n2/max(total_n,1)*100:4.1f}%)"
+    )
 
 if __name__ == "__main__":
     main()

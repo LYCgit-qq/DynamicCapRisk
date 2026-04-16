@@ -69,8 +69,9 @@ field_levels:
 calculation:
   window_size: 100
   final_smooth_sigma: 8.0
-  adjust_distribution: false  # 是否启用F_S分布微调
+  adjust_distribution: false  # 是否启用F_S分布微调（抬升低风险值）
   force_normalize_fs: false  # 是否强制F_S归一化到[0,1]
+  enable_tail_fix: false    # 是否启用右尾修正（压缩过高风险值）
 
 # ============= 路径配置 =============
 paths:

@@ -464,9 +464,10 @@ def plot_Fs_distribution(df: pd.DataFrame, scenario_name: str, output_dir: str):
     _save_and_close(fig, save_path, "F_S分布直方图")
     
 # =============================================================================
-# 阈值敏感性 F1 曲线
+# risk evaluation 评估结果可视化
 # =============================================================================
 
+# 阈值敏感性 F1 曲线
 def plot_threshold_f1(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
     """
     Figure 4.5：遍历阈值 θ，计算各阈值下高风险识别 F1，标注最优点。
@@ -513,43 +514,121 @@ def plot_threshold_f1(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> Non
     _savefig(fig, os.path.join(fig_dir, 'risk_eval_threshold_f1.png'), cfg['vis']['dpi'])
     plt.close()
 
-# =============================================================================
-# R 整体分布直方图
-# =============================================================================
 
-def plot_r_histogram(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple) -> None:
-    """Figure 4.6：全体样本 R 分布直方图，标注均值与最优风险阈值。"""
+# R 整体分布直方图
+def plot_r_histogram(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple, suffix: str = "") -> None:
+    """
+    Figure 4.6：全体样本 R 分布直方图，标注均值与最优风险阈值。
+    :param suffix: 文件名后缀，用于区分不同数据集（如 _non_baseline）
+    """
     set_paper_style()
+    # 全局基础字体大小（所有未单独指定的文字默认使用此大小）
+    plt.rcParams.update({'font.size': 14})
 
     r   = all_windows['R'].to_numpy()
     theta_low, theta_high = best_theta
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.hist(r, bins=60, color=PRIMARY_COLOR, edgecolor='white', alpha=0.85, density=True)
-    ax.axvline(theta_high,      color='red',            linestyle='--', linewidth=1.2,
-               label=f'高风险阈值 {theta_high}')
-    ax.axvline(theta_low,      color=SECONDARY_COLOR,  linestyle='--', linewidth=1.2,
-               label=f'低风险阈值 {theta_low}')
-    ax.axvline(r.mean(), color='black',           linestyle='-',  linewidth=1.2,
-               label=f'均值 {r.mean():.3f}')
-    ax.set_xlabel('风险度 R')
-    ax.set_ylabel('概率密度')
+    
+    # 阈值线：加粗线条匹配大字体
+    ax.axvline(theta_high,      color='red',            linestyle='--', linewidth=1.5,
+               label=f'高风险阈值 {theta_high:.3f}')
+    ax.axvline(theta_low,      color=SECONDARY_COLOR,  linestyle='--', linewidth=1.5,
+               label=f'低风险阈值 {theta_low:.3f}')
+    # ax.axvline(r.mean(), color='black',           linestyle='-',  linewidth=1.5,
+    #            label=f'均值 {r.mean():.3f}')
+
+    # 核心标签：加粗+放大至16号（学术论文标准核心字号）
+    ax.set_xlabel('风险度 R', fontsize=16, fontweight='bold')
+    ax.set_ylabel('概率密度', fontsize=16, fontweight='bold')
+    # 坐标轴刻度：14号，与全局字体一致
+    ax.tick_params(axis='both', labelsize=14, width=1.2)
+    
     ax.set_xlim(-0.05, 1.05)
-    ax.set_title('图4.6  全体样本风险度 R 分布直方图')
-    ax.legend()
-    ax.grid(True, linestyle='--', alpha=GRID_ALPHA)
+    # 图例：14号，增加边框提升辨识度
+    ax.legend(fontsize=14, frameon=True, edgecolor='black')
+    ax.grid(True, linestyle='--', alpha=GRID_ALPHA, linewidth=1.0)
     _apply_spine(ax)
     plt.tight_layout()
-    _savefig(fig, os.path.join(fig_dir, 'risk_eval_r_histogram.png'), cfg['vis']['dpi'])
+    
+    # 🔥 核心修改：根据 suffix 自动生成文件名
+    save_path = os.path.join(fig_dir, f'risk_eval_r_histogram{suffix}.png')
+    _savefig(fig, save_path, cfg['vis']['dpi'])
 
 
-# =============================================================================
-# 三组驾驶人 R 小提琴图
-# =============================================================================
-
-def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple) -> None:
-    """Figure 4.7：三组驾驶人 R 小提琴图，各组着不同色。"""
+def plot_r_histogram_dual(all_windows: pd.DataFrame, 
+                          non_baseline_windows: pd.DataFrame,
+                          cfg: dict, 
+                          fig_dir: str, 
+                          best_theta: tuple) -> None:
+    """
+    【新增】双子图 R 分布直方图：
+    左图 = 全体样本 | 右图 = 非基线路段(field_label≠0)
+    横向排列，共用图例，Y轴自适应，所有数值保留2位小数
+    """
     set_paper_style()
+    plt.rcParams.update({'font.size': 14})
+    theta_low, theta_high = best_theta
+
+    # 🔥 取消Y轴共享，实现自适应
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # ===================== 左子图：全体样本 R 分布 =====================
+    r_all = all_windows['R'].to_numpy()
+    ax1.hist(r_all, bins=60, color=PRIMARY_COLOR, edgecolor='white', 
+             alpha=0.85, density=True)
+    # 阈值线 + 数值保留2位小数
+    ax1.axvline(theta_high, color='red', linestyle='--', linewidth=1.5)
+    ax1.axvline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1.5)
+    
+    ax1.set_xlabel('风险度 R', fontsize=16, fontweight='bold')
+    ax1.set_ylabel('概率密度', fontsize=16, fontweight='bold')
+    ax1.set_title('全路段 R 分布', fontsize=16, fontweight='bold', pad=10)
+    ax1.tick_params(axis='both', labelsize=14, width=1.2)
+    ax1.set_xlim(-0.05, 1.05)
+    # 坐标轴刻度保留2位小数
+    ax1.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.2f}'))
+    ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.2f}'))
+    ax1.grid(True, linestyle='--', alpha=GRID_ALPHA, linewidth=1.0)
+    _apply_spine(ax1)
+
+    # ===================== 右子图：非基线路段 R 分布 =====================
+    r_non_base = non_baseline_windows['R'].to_numpy()
+    ax2.hist(r_non_base, bins=60, color=PRIMARY_COLOR, edgecolor='white', 
+             alpha=0.85, density=True)
+    # 阈值线 + 数值保留2位小数（共用图例）
+    ax2.axvline(theta_high, color='red', linestyle='--', linewidth=1.5,
+                label=f'高风险阈值 {theta_high:.2f}')
+    ax2.axvline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1.5,
+                label=f'低风险阈值 {theta_low:.2f}')
+    
+    ax2.set_xlabel('风险度 R', fontsize=16, fontweight='bold')
+    ax2.set_title('施工区路段 R 分布', fontsize=16, fontweight='bold', pad=10)
+    ax2.tick_params(axis='both', labelsize=14, width=1.2)
+    ax2.set_xlim(-0.05, 1.05)
+    # 坐标轴刻度保留2位小数
+    ax2.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.2f}'))
+    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.2f}'))
+    ax2.grid(True, linestyle='--', alpha=GRID_ALPHA, linewidth=1.0)
+    _apply_spine(ax2)
+
+    # ===================== 共用图例 =====================
+    ax2.legend(fontsize=14, frameon=True, edgecolor='black', loc='upper right')
+
+    # 整体布局
+    plt.tight_layout()
+    save_path = os.path.join(fig_dir, 'risk_eval_r_histogram_dual.png')
+    _savefig(fig, save_path, cfg['vis']['dpi'])
+    print("  双图 R 分布直方图 → risk_eval_r_histogram_dual.png")
+
+
+# 三组驾驶人 R 小提琴图
+def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, best_theta: tuple) -> None:
+    """Figure 4.7：三组驾驶人 R 分布小提琴图，各组着不同色。"""
+    set_paper_style()
+    # 与直方图保持完全一致的字体体系
+    plt.rcParams.update({'font.size': 14})
 
     groups = ['高能力组', '中能力组', '低能力组']
     gc     = cfg['vis']['group_colors']
@@ -564,27 +643,29 @@ def plot_violin_by_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str, bes
     for pc, g in zip(parts['bodies'], groups):
         pc.set_facecolor(gc[g])
         pc.set_alpha(0.7)
+    # 小提琴图统计线：加粗匹配大字体
     for comp in ['cmedians', 'cmaxes', 'cmins', 'cbars']:
         parts[comp].set_color('black')
-        parts[comp].set_linewidth(1.2)
+        parts[comp].set_linewidth(1.5)
 
-    ax.axhline(theta_high, color='red',           linestyle='--', linewidth=1, alpha=0.7)
-    ax.axhline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1, alpha=0.7)
+    # 阈值线
+    ax.axhline(theta_high, color='red',           linestyle='--', linewidth=1.2, alpha=0.7, label=f'高风险阈值 {theta_high:.3f}')
+    ax.axhline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1.2, alpha=0.7, label=f'低风险阈值 {theta_low:.3f}')
+    
     ax.set_xticks([1, 2, 3])
-    ax.set_xticklabels(groups)
-    ax.set_ylabel('风险度 R')
+    # 分组标签：加粗+14号
+    ax.set_xticklabels(groups, fontsize=14, fontweight='bold')
+    ax.set_ylabel('风险度 R', fontsize=16, fontweight='bold')
+    ax.tick_params(axis='y', labelsize=14, width=1.2)
+    
     ax.set_ylim(-0.05, 1.05)
-    ax.set_title('图4.7  三组驾驶人风险度分布小提琴图')
-    ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
+    ax.legend(fontsize=14, frameon=True, edgecolor='black')
+    ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA, linewidth=1.0)
     _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'risk_eval_violin_by_group.png'), cfg['vis']['dpi'])
 
-
-# =============================================================================
 # 场景×能力组 折线图
-# =============================================================================
-
 def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
     """
     Figure 4.8：三组驾驶人在四个场景下 R 均值折线图。
@@ -614,10 +695,7 @@ def plot_line_scenario_group(table_df: pd.DataFrame, cfg: dict, fig_dir: str) ->
     _savefig(fig, os.path.join(fig_dir, 'risk_eval_line_scenario_group.png'), cfg['vis']['dpi'])
 
 
-# =============================================================================
 # 场景×能力组 箱线图
-# =============================================================================
-
 def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
     """Figure 4.9：三组驾驶人在四个场景下 R 分组箱线图。"""
     set_paper_style()
@@ -660,12 +738,9 @@ def plot_box_scenario_group(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) 
     _savefig(fig, os.path.join(fig_dir, 'risk_eval_box_scenario_group.png'), cfg['vis']['dpi'])
 
 
-# =============================================================================
 # 风险等级堆叠柱状图
-# =============================================================================
-
 def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) -> None:
-    """Figure 4.10：三组驾驶人风险等级分布堆叠柱状图。"""
+    """Figure 4.10：三组驾驶人风险等级分布堆叠柱状图"""
     set_paper_style()
 
     groups = ['高能力组', '中能力组', '低能力组']
@@ -683,34 +758,40 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
     fig, ax = plt.subplots(figsize=(7, 5))
     bottoms = np.zeros(len(groups))
 
-    for lvl in levels:
-        vals = [pcts[g][levels.index(lvl)] for g in groups]
-        bars = ax.bar(x, vals, bottom=bottoms, color=lc[lvl], label=lvl,
+    # 🔴 调整1：柱子进一步收窄（0.55，更紧凑不拥挤）
+    bar_width = 0.55
+
+    for idx, lvl in enumerate(levels):
+        vals = [pcts[g][idx] for g in groups]
+        bars = ax.bar(x, vals, width=bar_width, bottom=bottoms, color=lc[lvl], label=lvl,
                       alpha=0.85, edgecolor='white', linewidth=0.5)
+        # 🔴 调整2：百分比文字改为黑色（清晰可见），保留大字体
         for rect, v in zip(bars, vals):
             if v > 3:
                 ax.text(rect.get_x() + rect.get_width() / 2,
                         rect.get_y() + rect.get_height() / 2,
                         f'{v:.1f}%', ha='center', va='center',
-                        fontsize=9, color='white', fontweight='bold')
+                        fontsize=14, color='black', fontweight='bold')
         bottoms += np.array(vals)
 
+    # 字体设置（保留之前放大的效果）
     ax.set_xticks(x)
-    ax.set_xticklabels(groups)
-    ax.set_ylabel('占比 (%)')
+    ax.set_xticklabels(groups, fontsize=13)
+    ax.set_ylabel('占比 (%)', fontsize=14)
+    ax.tick_params(axis='y', labelsize=12)
     ax.set_ylim(0, 105)
-    ax.set_title('图4.10  三组驾驶人风险等级分布堆叠柱状图')
-    ax.legend(loc='upper right')
+    # ax.set_title('图4.10  三组驾驶人风险等级分布堆叠柱状图', fontsize=18, fontweight='bold')
+    
+    # 🔴 调整3：图例移到图表外部右侧，完全不遮挡数据
+    ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=13)
+    
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'risk_eval_stacked_bar.png'), cfg['vis']['dpi'])
 
 
-# =============================================================================
-# 典型驾驶人时序曲线
-# =============================================================================
-
+# 典型驾驶人时序曲线（底部横向图例+双图Y轴固定 最终版）
 def plot_timeseries_typical(all_windows: pd.DataFrame,
                              sample_field: List[np.ndarray],
                              sample_ad_norm: List[np.ndarray],
@@ -719,17 +800,8 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
                              cfg: dict,
                              fig_dir: str,
                              best_theta: tuple) -> None:
-    """
-    Figure 4.11：高/低能力组各取一名代表（R 均值最接近组均值的样本），
-    双行子图展示全程 R 时序 + 场景背景色块 + 阈值线。
-
-    Args:
-        sample_ad_norm:    各样本归一化后的 Ã_d 数组列表
-        fs_temporal_list:  各样本已完成空间→时间映射的 F_S 数组列表
-    """
     set_paper_style()
 
-    gc    = cfg['vis']['group_colors']
     theta_low, theta_high = best_theta
     lname = {int(k): v for k, v in cfg['scenarios']['label_name'].items()}
 
@@ -740,58 +812,80 @@ def plot_timeseries_typical(all_windows: pd.DataFrame,
         g_mean  = all_windows[all_windows['group'] == group_name]['R'].mean()
         s_means = {i: all_windows[all_windows['sample_idx'] == i]['R'].mean()
                    for i in idxs
-                   if len(all_windows[all_windows['sample_idx'] == i]) > 0}
+                   if len(all_windows['sample_idx'] == i) > 0}
         return min(s_means, key=lambda i: abs(s_means[i] - g_mean))
 
     reps = [('高能力组代表', _pick_rep('高能力组')),
             ('低能力组代表', _pick_rep('低能力组'))]
 
-    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=False)
-    # fig.suptitle('图4.11  典型驾驶人风险度时序演化曲线', fontsize=15, fontweight='bold')
+    fig, axes = plt.subplots(2, 1, figsize=(16, 10), sharex=False)
+
+    # 场景配色：0=基线无底色，1/2/3=施工区
+    scene_colors = {
+        1: "#2F5597",   # 施工区1
+        2: "#ED7D31",   # 施工区2
+        3: "#548235"    # 施工区3
+    }
 
     for row_idx, (title, sidx) in enumerate(reps):
-        ax     = axes[row_idx]
-        fld    = np.asarray(sample_field[sidx])
+        ax = axes[row_idx]
+        fld = np.asarray(sample_field[sidx])
         r = all_windows[all_windows['sample_idx'] == sidx]['R'].to_numpy()
-        x      = np.arange(len(r))
+        x = np.arange(len(r))
 
-        _fill_scene_bg(ax, fld[:len(r)], cfg)
-        ax.plot(x, r,
-                color=gc.get(cap_groups.get(sidx, '中能力组'), '#666666'),
-                linewidth=LINE_WIDTH, label='R')
-        ax.axhline(theta_high, color='red',           linestyle='--', linewidth=1.0, alpha=0.8,
-                   label=f'高风险 {theta_high}')
-        ax.axhline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1.0, alpha=0.8,
-                   label=f'低风险 {theta_low}')
-        ax.fill_between(x,  theta_high,  1.0, alpha=0.06, color='red')
-        ax.set_ylim(-0.05, 1.05)
-        ax.set_ylabel('R')
-        ax.set_title(f'{title}（样本 {sidx}，R 均值={r.mean():.3f}）')
-        ax.legend(loc='upper right', fontsize=8)
+        # 仅施工区上色，基线0无底色
+        i = 0
+        while i < len(fld):
+            lbl = int(fld[i])
+            j = i + 1
+            while j < len(fld) and int(fld[j]) == lbl:
+                j += 1
+            if lbl in scene_colors:
+                ax.axvspan(i - 0.5, j - 0.5, facecolor=scene_colors[lbl], alpha=0.35, zorder=0)
+            i = j
+
+        # R线统一红色
+        ax.plot(x, r, color='red', linewidth=LINE_WIDTH + 0.5, drawstyle='steps-post')
+        # 阈值虚线
+        ax.axhline(theta_high, color='red', linestyle='--', linewidth=1.2, alpha=0.9)
+        ax.axhline(theta_low, color=SECONDARY_COLOR, linestyle='--', linewidth=1.2, alpha=0.9)
+
+        # ============== 核心修改1：双图Y轴强制固定（不自适应） ==============
+        ax.set_ylim(0, 1.05)
+        
+        # 字体设置
+        ax.set_ylabel('风险度 R', fontsize=22, fontweight='bold')
+        ax.set_title(f'{title}（样本 {sidx}，R 均值={r.mean():.2f}）', fontsize=24, fontweight='bold')
+        ax.tick_params(axis='both', labelsize=20)
         ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
         _apply_spine(ax)
         if row_idx == len(reps) - 1:
-            ax.set_xlabel('窗口序号')
+            ax.set_xlabel('窗口序号', fontsize=22, fontweight='bold')
 
-    all_lbls = set(np.concatenate([np.asarray(sample_field[r]).astype(int)
-                                    for _, r in reps]))
-    bg = _scene_bg_colors(cfg)
-    patches = [mpatches.Patch(facecolor=bg[l], alpha=0.5,
-                               label=lname.get(l, str(l)))
-               for l in sorted(all_lbls) if l in bg]
-    if patches:
-        fig.legend(handles=patches, loc='lower center', ncol=len(patches),
-                   fontsize=9, bbox_to_anchor=(0.5, -0.02))
+    # 构建图例
+    legend_handles = []
+    legend_handles.append(plt.Line2D([], [], color='red', lw=LINE_WIDTH + 0.5, label='风险度 R'))
+    legend_handles.append(plt.Line2D([], [], color=SECONDARY_COLOR, linestyle='--', lw=1.2, label=f'低风险阈值'))
+    legend_handles.append(plt.Line2D([], [], color='red', linestyle='--', lw=1.2, label=f'高风险阈值'))
+    for lbl in sorted(scene_colors.keys()):
+        legend_handles.append(mpatches.Patch(facecolor=scene_colors[lbl], alpha=0.35, label=lname.get(lbl, f'施工区{lbl}')))
 
-    plt.tight_layout(rect=[0, 0.05, 1, 1])
-    _savefig(fig, os.path.join(fig_dir, 'risk_eval_timeseries_typical.png'),
-             cfg['vis']['dpi'])
+    # ============== 核心修改2：图例横向放在底部 ==============
+    fig.legend(
+        handles=legend_handles,
+        loc='lower center',    # 底部居中
+        bbox_to_anchor=(0.5, 0.01),
+        ncol=6,                # 横向排列
+        fontsize=18,
+        frameon=True
+    )
 
+    # ============== 核心修改3：给底部图例留空间 ==============
+    plt.tight_layout(rect=[0, 0.08, 1, 1])
+    
+    _savefig(fig, os.path.join(fig_dir, 'risk_eval_timeseries_typical.png'), cfg['vis']['dpi'])
 
-# =============================================================================
 # 单样本时序图（调试 / --plot_sample 用）
-# =============================================================================
-
 def plot_single_sample(sample_idx: int,
                         sample_field: List[np.ndarray],
                         fs_temporal_list: List[np.ndarray],
@@ -903,24 +997,6 @@ def plot_fs_ad_filled(sample_idx: int,
                       resample_factor: int = 10,
                       ad_smooth_window: int = 35,
                       ad_smooth_poly: int = 3) -> None:
-    """
-    绘制单个样本的 F_S 与 Ã_d 平滑折线图，并用栅格线填充两者之间的封闭区域：
-      · F_S > Ã_d  →  黄色斜线栅格填充（高风险区）
-      · F_S < Ã_d  →  绿色斜线栅格填充（低风险区）
-
-    Parameters
-    ----------
-    sample_idx      : 样本编号（用于标题/文件名）
-    fs_arr          : shape (T,) 的 F_S 时序数组
-    ad_norm_arr     : shape (T,) 的 Ã_d 归一化时序数组
-    cfg             : 配置字典（读取 vis.dpi）
-    fig_dir         : 图片保存目录
-    smooth_window   : F_S 的 SG 滤波窗口长度（默认 15）
-    smooth_poly     : F_S 的 SG 多项式阶数（默认 3）
-    resample_factor : 样条插值升采样倍数（默认 10）
-    ad_smooth_window: Ã_d 的 SG 滤波窗口长度（默认 51，更平滑）
-    ad_smooth_poly  : Ã_d 的 SG 多项式阶数（默认 3）
-    """
     set_paper_style()
     assert len(fs_arr) == len(ad_norm_arr), "F_S 与 Ã_d 长度必须一致"
 

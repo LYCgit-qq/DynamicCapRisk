@@ -1,12 +1,10 @@
-# ============================================================
+# D:\Local\DynamicCapRisk\config\dataset.yaml
 # MT-JP 联合预测模型 — 数据集构建配置
-# 对应脚本: src/3_prediction/dataset.py
-# 注意：代码已移除内置默认配置，所有参数均依赖此YAML文件
-# ============================================================
 
 # -------------------------- 路径配置 --------------------------
 paths:
-  raw_pkl:       "data/processed/raw_data.pkl"               # 原始多模态信号（act/eye/phy）
+  # raw_pkl:       "data/processed/raw_data.pkl"               # 原始多模态信号（act/eye/phy）
+  raw_pkl:       "data/processed/raw_data_17.pkl"
   cap_pkl:       "output/1_capability_assessment/results/Afl_capability_fluctuation.pkl"  # 能力波动结果
   risk_csv:      "output/2_risk_assessment/results/risk_windows_all.csv"          # 风险评估结果
   output_pkl:    "data/dataset/dataset"                 # 输出数据集PKL（自动拼接增强参数+后缀）
@@ -38,7 +36,7 @@ normalization:
 # -------------------------- 数据增强配置 --------------------------
 # 增强时机：Z-score标准化前执行，仅作用于训练集，增强样本追加到原始训练集后
 augmentation:
-  enabled:       true      # 增强总开关（true=启用 / false=关闭）
+  enabled:       false      # 增强总开关（true=启用 / false=关闭）
   only_on_train: true     # 仅对训练集增强（val/test集始终不增强）
 
   # 各增强方法配置（enabled=true才会生效）

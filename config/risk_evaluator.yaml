@@ -11,8 +11,9 @@ model:
   # R = 2R - 0.16
   thresh_high:  0.10    # 高风险阈值 θ
   thresh_low:  -0.10    # 低风险阈值 -θ
-  fs_baseline:  0.10    # label=0 自由路段基线场强
+  fs_baseline:  null    # label=0 自由路段基线场强
   force_normalize_r: true  # 是否强制R归一化到[0,1]
+  use_fixed_threshold: false # 风险阈值：true=使用yaml固定阈值 | false=使用数据70/95分位自动阈值
 
 # ── 场景标签映射 ──────────────────────────────────────────────
 scenarios:
