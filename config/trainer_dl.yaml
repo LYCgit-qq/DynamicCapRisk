@@ -22,8 +22,8 @@ paths:
 
 # -------------------------- 模型配置 --------------------------
 model:
-  model_type: "cnn_lstm"
-  ablation: "none"
+  model_type: "mtrp"
+  ablation: "no_cross_attn"
   seq_len:    5
   input_dim:  18
   n_classes:  3

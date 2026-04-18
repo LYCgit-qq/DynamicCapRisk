@@ -4,7 +4,7 @@
 # -------------------------- 路径配置 --------------------------
 paths:
   dataset_pkl: "data/dataset/dataset_aug-False.pkl"
-  ckpt:        "/root/autodl-tmp/DynamicCapRisk/output/3_prediction/runs/20260416_221048_mtrp/best_model.pt"
+  ckpt:        "/root/autodl-tmp/DynamicCapRisk/output/3_prediction/runs/20260417_125159_mtrp/best_model.pt"
   # ckpt:        null  # 自动评估最新 pt
   output_dir:  "output/3_prediction"
 
