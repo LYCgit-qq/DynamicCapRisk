@@ -9,7 +9,7 @@ base_config_path: "../../config/trainer_dl.yaml"
 train_script: "src/3_prediction/trainer_dl.py"
 
 # 最大并行进程数
-max_parallel_workers: 12
+max_parallel_workers: 4
 
 # ===================== 多版本参数网格配置 =====================
 # 当前激活使用的参数版本
