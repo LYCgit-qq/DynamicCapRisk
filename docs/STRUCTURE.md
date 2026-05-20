@@ -106,30 +106,3 @@ DynamicCapRisk/
   ├─→ [2_risk_assessment/] → 风险度 R, 风险等级
   └─→ [3_prediction/] → MT-RP模型 → 预测结果
 ```
-
-## 使用流程
-
-### 1. 数据预处理
-```bash
-python -m src.data_processing.main --config config/dataset.yaml
-```
-
-### 2. 能力评估
-```bash
-python -m src.1_capability_assessment.main --config config/baseline_capability.yaml
-```
-
-### 3. 风险评估
-```bash
-python -m src.2_risk_assessment.main --config config/risk_evaluator.yaml
-```
-
-### 4. 模型训练
-```bash
-python -m src.3_prediction.trainer --config config/trainer_dl.yaml
-```
-
-### 5. 模型评估
-```bash
-python -m src.3_prediction.evaluator --config config/evaluator.yaml
-```
