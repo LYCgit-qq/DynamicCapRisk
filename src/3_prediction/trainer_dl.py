@@ -1,4 +1,4 @@
-# /root/autodl-tmp/DynamicCapRisk/src/3_prediction/trainer_dl.py
+# src/3_prediction/trainer_dl.py
 """
 MTRP / LSTM / GRU / CNN-LSTM 风险预测模型训练器
 输出目录：output/3_prediction/runs/

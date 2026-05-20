@@ -35,7 +35,6 @@ def load_raw(pkl_path: str) -> list:
 
 def load_ad_data(cfg: dict) -> pd.DataFrame:
     ad_df = pd.read_csv(cfg["paths"]["ad_csv"], encoding="utf-8-sig")
-    ad_df = ad_df.reset_index().rename(columns={"index": "window_idx"})
     print(f"✅ Ad数据加载：{len(ad_df)} 个窗口")
     return ad_df
 
@@ -102,7 +101,8 @@ def build_performance(act_list, cfg):
 # 数据合并
 # =============================================================================
 def merge_data(ad_df, perf_df):
-    merged = pd.merge(perf_df, ad_df, on="window_idx", how="inner")
+    # 此时 ad_df 已经包含 sample_idx 和 window_idx
+    merged = pd.merge(perf_df, ad_df, on=["sample_idx", "window_idx"], how="inner")
     print(f"✅ 数据合并完成：{len(merged)} 有效窗口")
     return merged
 
@@ -110,6 +110,15 @@ def merge_data(ad_df, perf_df):
 # 有效性验证
 # =============================================================================
 def validate_ad(merged, cfg):
+    # ========== 新增：打印Ad分布统计 ==========
+    ad_series = merged["动态驾驶能力Ad"]
+    print("\n📊 动态驾驶能力Ad 数值分布统计：")
+    print(f"最小值: {ad_series.min():.4f} | 最大值: {ad_series.max():.4f}")
+    print(f"均值: {ad_series.mean():.4f} | 中位数: {ad_series.median():.4f}")
+    print(f"25%分位: {ad_series.quantile(0.25):.4f} | 75%分位: {ad_series.quantile(0.75):.4f}")
+    print(f"Ad < 0.3 的样本数: {len(ad_series[ad_series < 0.3])}")
+    # ========================================
+
     metrics = {
         "异常驾驶事件": "abnormal_event",
         "车道保持稳定性": "lane_stability",

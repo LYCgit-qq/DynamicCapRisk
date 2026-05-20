@@ -1,4 +1,4 @@
-# /root/autodl-tmp/DynamicCapRisk/src/models/mtrp_model.py
+# src/models/mtrp_model.py
 """
 MT-RP 风险预测模型（移除能力预测分支）
 Multimodal Transformer for Risk Prediction

@@ -1,4 +1,4 @@
-# /root/autodl-tmp/DynamicCapRisk/src/models/baseline_models.py
+# src/models/baseline_models.py
 """
 包含：LSTM、GRU、CNN-LSTM
 均采用纯风险多任务输出头，与 MT-RP 保持完全相同的输入输出接口、损失函数适配。

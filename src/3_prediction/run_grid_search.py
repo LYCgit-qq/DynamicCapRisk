@@ -1,5 +1,5 @@
 '''
-/root/autodl-tmp/DynamicCapRisk/src/3_prediction/run_grid_search.py
+src/3_prediction/run_grid_search.py
 pkill -f "/root/autodl-tmp/DynamicCapRisk"
 '''
 
@@ -17,7 +17,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from multiprocessing import Lock
 
 # ===================== 【配置文件路径】唯一硬编码路径 =====================
-GRID_SEARCH_CONFIG_PATH = "/root/autodl-tmp/DynamicCapRisk/config/run_grid_search.yaml"
+GRID_SEARCH_CONFIG_PATH = "config/run_grid_search.yaml"
 # ======================================================================
 
 # 加载配置文件

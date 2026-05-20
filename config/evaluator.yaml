@@ -1,17 +1,19 @@
-# /root/autodl-tmp/DynamicCapRisk/config/evaluator.yaml
+# config/evaluator.yaml
 # 对应脚本: src/3_prediction/evaluator.py
 
 # -------------------------- 路径配置 --------------------------
 paths:
   dataset_pkl: "data/dataset/dataset_aug-False.pkl"
-  ckpt:        "/root/autodl-tmp/DynamicCapRisk/output/3_prediction/runs/20260417_125159_mtrp/best_model.pt"
+  # ckpt:        "output/3_prediction/runs/20260417_203110_mtrp/best_model.pt"  # 高风险最优
+  # ckpt:        "output/3_prediction/runs/20260417_235645_mtrp/best_model.pt"  # 回归最优
+  ckpt:        "output/3_prediction/runs/20260417_171411_mtrp/best_model.pt"  # risk回归r2最优
   # ckpt:        null  # 自动评估最新 pt
   output_dir:  "output/3_prediction"
 
 # -------------------------- 评估配置 --------------------------
 eval:
   # 原有配置保留（batch_size、split、visualize等）
-  batch_size: 256
+  batch_size: 64
   split: test
   visualize: true
   # 阈值来源：config=从配置读取 | file=从CSV文件读取
@@ -20,7 +22,7 @@ eval:
   risk_thresh_low: 0.16
   risk_thresh_high: 0.76
   # 阈值文件路径（threshold_source=file 时生效）
-  threshold_csv_path: /root/autodl-tmp/DynamicCapRisk/output/2_risk_assessment/results/risk_optimal_threshold.csv
+  threshold_csv_path: output/2_risk_assessment/results/risk_optimal_threshold.csv
 
 # -------------------------- 分类标签 --------------------------
 class_names: ["低风险", "中风险", "高风险"]

@@ -1,3 +1,5 @@
+# D:\Local\DynamicCapRisk\src\1_capability_assessment\capability_fluctuation.py
+
 import os
 import yaml
 import argparse
@@ -5,7 +7,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import pickle
-from scipy.stats import rankdata
+from scipy.stats import rankdata, pearsonr
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.preprocessing import StandardScaler
 from src.visualization.plot_capability import run_all_visualizations
@@ -237,13 +239,33 @@ def extract_features_single_sample(act_win, eye_win, phy_win, col_map):
 
 # ====================== 3. 特征筛选 ======================
 def correlation_filter(df, threshold=0.8):
-    """Pearson相关性分析筛选"""
+    """
+    Pearson相关性分析筛选 + 显著性p值计算
+    返回：筛选后的df、删除特征列表、相关系数矩阵、p值矩阵
+    """
     if df.empty or len(df.columns) < 2:
-        return df, []
+        return df, [], pd.DataFrame(), pd.DataFrame()
+
+    # 1. 计算绝对值相关系数矩阵
     corr_mat = df.corr().abs()
+    # 2. 初始化p值矩阵（对称矩阵）
+    pval_mat = pd.DataFrame(np.ones_like(corr_mat), index=df.columns, columns=df.columns)
+    cols = df.columns
+
+    # 3. 遍历特征对，计算每一组的相关系数p值
+    for i, col1 in enumerate(cols):
+        for j, col2 in enumerate(cols):
+            if i >= j:  # 跳过对角线和下三角（对称矩阵，避免重复计算）
+                continue
+            corr, p_value = pearsonr(df[col1], df[col2])
+            pval_mat.loc[col1, col2] = p_value
+            pval_mat.loc[col2, col1] = p_value
+
+    # 4. 筛选高相关性特征（上三角）
     upper = corr_mat.where(np.triu(np.ones(corr_mat.shape), k=1).astype(bool))
     to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
-    return df.drop(columns=to_drop), to_drop
+
+    return df.drop(columns=to_drop), to_drop, corr_mat, pval_mat
 
 
 def vif_filter(df, threshold=10):
@@ -513,10 +535,14 @@ def save_feature_weights(weight_method, structural_w, ent_w, combined_w, outdir)
     print(f"权重文件已保存： {save_path}")
 
 
-def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, outdir):
+def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, outdir, pval_matrix):
     """
     合并保存【相关性】和【VIF】筛选删除的所有特征
-    输出文件：Afl_dropped_features.csv
+    输出文件：
+    1. Afl_dropped_features.csv
+    2. Afl_feature_correlation_matrix.csv（相关系数）
+    3. Afl_feature_correlation_pvalues.csv（p值）
+    4. Afl_feature_vif_test.csv
     """
     # 1. 构建所有删除特征的列表+原因
     dropped_data = []
@@ -540,11 +566,18 @@ def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result
         index=False, encoding="utf-8-sig"
     )
     
-    # 3. 保留原有的相关系数矩阵输出（论文需要）
+    # 3. 保存相关系数矩阵（原有功能）
     features_df.corr().to_csv(
         os.path.join(outdir, "Afl_feature_correlation_matrix.csv"),
         encoding="utf-8-sig"
     )
+
+    # 保存相关性p值矩阵
+    if not pval_matrix.empty:
+        pval_matrix.to_csv(
+            os.path.join(outdir, "Afl_feature_correlation_pvalues.csv"),
+            encoding="utf-8-sig"
+        )
 
     # 4. Save完整VIF检验结果（包含删除+保留的特征）
     vif_df = vif_result.sort_values(["processing_result", "VIF"], ascending=[False, False])
@@ -553,7 +586,6 @@ def save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result
         index=False,
         encoding="utf-8-sig",
     )
-
 
 def save_fluctuation_stats(A_fl, outdir, config):
     """Save overall fluctuation statistics"""
@@ -693,7 +725,7 @@ def main():
         features_df = features_df.drop(columns=["sample_id"])
 
     # 3. 特征筛选
-    features_corr, dropped_corr = correlation_filter(
+    features_corr, dropped_corr, corr_matrix, pval_matrix = correlation_filter(
         features_df, threshold=config["correlation_threshold"]
     )
     features_final, vif_result = vif_filter(
@@ -771,7 +803,7 @@ def main():
     print(f"\nPKL结果已保存至:   {output_path}")
 
     # 8. 保存论文 CSV
-    save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, res_dir)
+    save_all_dropped_features(dropped_corr, dropped_vif, features_df, vif_result, res_dir, pval_matrix)
     save_feature_weights(weight_method, structural_w, ent_w, combined_w, res_dir)
     save_fluctuation_stats(A_fl, res_dir, config)
     save_fluctuation_by_group(A_fl, None, res_dir, config)

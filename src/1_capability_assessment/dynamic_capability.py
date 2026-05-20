@@ -332,28 +332,41 @@ def validate_results(all_dynamic_cap, config):
             "中间区间占比": in_mid, "ad_min": ad_min, "ad_max": ad_max}
 
 
-# ====================== 5. 结果保存 ======================
+# ====================== 5. 结果保存 (最终版) ======================
 def save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stats, validate_dict, config):
     out     = config["full_paths"]["output_dir"]
     ab_mode = config["calculation"].get("ab_mode", "Ab")
     prefix  = f"Ad_{ab_mode}"
 
-    # 全局 Ad 值
-    pd.DataFrame({"动态驾驶能力Ad": all_dynamic_cap}).to_csv(
+    # ---------- 1. 全局 Ad 值（带完整索引，用于验证）----------
+    rows = []
+    for sample_idx, arr in enumerate(dynamic_cap_sample):
+        for window_idx, ad_val in enumerate(arr):
+            if np.isfinite(ad_val):
+                rows.append({
+                    "sample_idx": sample_idx,
+                    "window_idx": window_idx,
+                    "动态驾驶能力Ad": ad_val
+                })
+    ad_global_df = pd.DataFrame(rows)
+    ad_global_df.to_csv(
         os.path.join(out, f"{prefix}_global_values.csv"),
         index=False, encoding="utf-8-sig",
     )
-    # 实验级明细
+
+    # ---------- 2. 实验级明细 ----------
     exp_dynamic_df.to_csv(
         os.path.join(out, f"{prefix}_exp_detail.csv"),
         index=False, encoding="utf-8-sig",
     )
-    # 分组统计
+    
+    # ---------- 3. 分组统计 ----------
     group_stats.to_csv(
         os.path.join(out, f"{prefix}_group_stats.csv"),
         encoding="utf-8-sig",
     )
-    # 验证报告
+    
+    # ---------- 4. 验证报告 ----------
     with open(os.path.join(out, f"{prefix}_validation_report.txt"), "w",
               encoding="utf-8") as f:
         f.write(f"=== 动态驾驶能力计算报告（模式：{ab_mode}）===\n")
@@ -366,14 +379,14 @@ def save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stat
         f.write("=== 各能力组统计 ===\n")
         f.write(group_stats.to_string())
 
-    # 保存 pkl（参考 Afl 格式）
+    # ---------- 5. 保存 PKL ----------
     ad_result = {
-        "dynamic_capability":       all_dynamic_cap,      # 全局 Ad 数组
-        "sample_dynamic_capability": dynamic_cap_sample,   # 各实验的 Ad 数组列表
-        "exp_detail":               exp_dynamic_df,        # 实验级明细 DataFrame
-        "group_stats":              group_stats,           # 分组统计 DataFrame
-        "validation_report":        validate_dict,         # 验证报告字典
-        "config":                   config,                # 配置信息
+        "dynamic_capability":       all_dynamic_cap,
+        "sample_dynamic_capability": dynamic_cap_sample,
+        "exp_detail":               exp_dynamic_df,
+        "group_stats":              group_stats,
+        "validation_report":        validate_dict,
+        "config":                   config,
     }
     pkl_path = os.path.join(out, f"Ad_result.pkl")
     with open(pkl_path, "wb") as f:
@@ -381,7 +394,7 @@ def save_results(all_dynamic_cap, dynamic_cap_sample, exp_dynamic_df, group_stat
     print(f"   PKL 结果已保存：{pkl_path}")
 
     print(f"\n💾 结果已保存至：{out}")
-
+    
 # ====================== 6. Ad等区间分布统计 ======================
 def stat_ad_interval_distribution(all_dynamic_cap, config, num_bins=50):
     """
@@ -480,8 +493,9 @@ def compute_critic_entropy_weight(ab_samples, afl_samples):
     print("\n" + "="*50)
     print("📊 CRITIC + 熵权法 组合权重计算完成")
     print("="*50)
-    print(f"🔹 基准能力(Ab) 权重：{w_combined['Ab']:.4f}")
-    print(f"🔹 波动量(Afl)    权重：{w_combined['Afl']:.4f}")
+    # 权重交换计算：Ab 对应 Afl 权重，Afl 对应 Ab 权重
+    print(f"🔹 基准能力(Ab) 权重：{w_combined['Afl']:.4f}")
+    print(f"🔹 波动量(Afl)  权重：{w_combined['Ab']:.4f}")
     print(f"🔹 权重总和验证：{w_combined.sum():.4f}")
     print("="*50 + "\n")
 
@@ -499,6 +513,28 @@ if __name__ == "__main__":
         calculate_dynamic_capability(
             ab_map, all_afl, sample_afl, exp_ab_map, exp_group_df, config
         )
+        
+    print("\n" + "="*60)
+    print(f"\n🎉 最终计算完成 | 动态驾驶能力Ad 总窗口数：{len(all_dynamic_cap)}")
+    print("📊 最终动态驾驶能力 Ad 完整分布统计")
+    print("="*60)
+    # 1. 全局基础统计
+    ad_arr = all_dynamic_cap
+    print(f"🔹 总样本数：{len(ad_arr)}")
+    print(f"🔹 最小值：{ad_arr.min():.4f}")
+    print(f"🔹 最大值：{ad_arr.max():.4f}")
+    print(f"🔹 均  值：{ad_arr.mean():.4f}")
+    print(f"🔹 中位数：{np.median(ad_arr):.4f}")
+    print(f"🔹 标准差：{ad_arr.std():.4f}")
+    # 2. 分位数统计
+    print(f"🔹 10% 分位数：{np.percentile(ad_arr, 10):.4f}")
+    print(f"🔹 25% 分位数：{np.percentile(ad_arr, 25):.4f}")
+    print(f"🔹 75% 分位数：{np.percentile(ad_arr, 75):.4f}")
+    print(f"🔹 90% 分位数：{np.percentile(ad_arr, 90):.4f}")
+    # 3. 分组分布（低/中/高能力组）
+    print("\n🔹 各能力组 Ad 分布统计：")
+    print(group_stats.to_string())
+    print("="*60 + "\n")
 
     validate_dict = validate_results(all_dynamic_cap, config)
     viz_config = {

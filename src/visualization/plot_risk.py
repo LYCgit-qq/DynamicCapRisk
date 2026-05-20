@@ -200,6 +200,7 @@ def plot_stacked_bar(
     """
     绘制堆叠柱状图
     内置基线场景固定数值，自动生成基线+施工区1-3完整图表
+    最终优化版：白底彩线+方向区分斜线（/ | \）+轻微密度差异
     """
     set_paper_style()
 
@@ -229,16 +230,30 @@ def plot_stacked_bar(
     x = np.arange(len(fixed_scenarios))
     width = 0.4  # 收窄柱子
 
-    # 绘制堆叠柱状图
+    # 白底彩线 + 方向区分斜线 + 轻微密度差异
+    # 道路几何：正斜线（最稀疏）
     ax.bar(x, geo_values, width, label=f'道路几何 (w={w_geo})',
-           color=RISK_COLORS['道路几何'], edgecolor='white', linewidth=1.2)
+           color='white',
+           edgecolor=RISK_COLORS['道路几何'],
+           linewidth=1.5,
+           hatch='///')
+    
+    # 道路设施：竖线（中等密度）
     ax.bar(x, sign_values, width, bottom=geo_values,
            label=f'道路设施 (w={w_sign})',
-           color=RISK_COLORS['道路设施'], edgecolor='white', linewidth=1.2)
+           color='white',
+           edgecolor=RISK_COLORS['道路设施'],
+           linewidth=1.5,
+           hatch='||')
+    
+    # 车辆交互：反斜线（最密集）
     ax.bar(x, veh_values, width,
            bottom=[i + j for i, j in zip(geo_values, sign_values)],
            label=f'车辆交互 (w={w_veh})',
-           color=RISK_COLORS['车辆交互'], edgecolor='white', linewidth=1.2)
+           color='white',
+           edgecolor=RISK_COLORS['车辆交互'],
+           linewidth=1.5,
+           hatch='\\\\\\')  # 三个反斜线需要转义为六个
 
     # 标注顶部F_S数值（超大字体）
     for idx, total in enumerate(total_values):
@@ -248,7 +263,6 @@ def plot_stacked_bar(
     # 坐标轴设置（超大字体）
     ax.set_xlabel('场景', fontsize=16, weight='bold')
     ax.set_ylabel('场强贡献值', fontsize=16, weight='bold')
-    # ax.set_title("风险场强子项贡献堆叠柱状图", fontsize=20, pad=20, weight='bold')
     ax.set_xticks(x)
 
     # 中文标签映射
@@ -270,10 +284,9 @@ def plot_stacked_bar(
     ax.legend(loc='upper left', fontsize=14, framealpha=0.9, prop={'weight':'bold'})
     _apply_spine(ax)
 
-    # ✅ 修复核心错误：os.path.join()
     save_path = os.path.join(output_dir, save_name)
     _save_and_close(fig, save_path, "堆叠柱状图")
-
+            
 # =============================================================================
 # 场强沿距离演化曲线
 # =============================================================================
@@ -285,7 +298,7 @@ def plot_field_evolution(
     save_name: str = None
 ):
     """
-    绘制场强沿距离的演化曲线
+    绘制场强沿距离的演化曲线（综合场强实线，分场强全非实线区分）
 
     Args:
         df: 风险场强结果DataFrame
@@ -301,15 +314,20 @@ def plot_field_evolution(
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8),
                                    sharex=True, height_ratios=[2, 1])
 
+    # -------------------------- 仅修改此区域开始 --------------------------
+    # 道路几何：长虚线
     ax1.plot(df['距离 (m)'], df['s_geo_norm'],
             label='道路几何', linewidth=LINE_WIDTH,
-            color=RISK_COLORS['道路几何'])
+            color=RISK_COLORS['道路几何'], linestyle='--')
+    # 道路设施：点划线
     ax1.plot(df['距离 (m)'], df['s_sign_norm'],
             label='道路设施', linewidth=LINE_WIDTH,
-            color=RISK_COLORS['道路设施'])
+            color=RISK_COLORS['道路设施'], linestyle='-.')
+    # 车辆交互：短点线
     ax1.plot(df['距离 (m)'], df['s_veh_norm'],
             label='车辆交互', linewidth=LINE_WIDTH,
-            color=RISK_COLORS['车辆交互'])
+            color=RISK_COLORS['车辆交互'], linestyle=':')
+    # -------------------------- 仅修改此区域结束 --------------------------
 
     ax1.set_ylabel('归一化场强', fontsize=14, weight='bold')
     ax1.set_ylim(-0.05, 1.05)
@@ -319,10 +337,11 @@ def plot_field_evolution(
                  fontsize=15, pad=10, weight='bold')
     sns.despine(ax=ax1)
 
+    # 综合场强保持原实线+加粗样式，与分场强形成明确层级
     ax2.fill_between(df['距离 (m)'], df['F_S'],
                     color=RISK_COLORS['综合场强'], alpha=0.3, label='综合场强')
     ax2.plot(df['距离 (m)'], df['F_S'],
-            linewidth=LINE_WIDTH + 0.5, color=RISK_COLORS['综合场强'])
+            linewidth=LINE_WIDTH + 0.5, color=RISK_COLORS['综合场强'], linestyle='-')
 
     ax2.axhspan(0,   0.3, alpha=0.1, color=ACCENT_COLOR,    label='低')
     ax2.axhspan(0.3, 0.5, alpha=0.1, color='#F5C518',       label='中')
@@ -339,7 +358,7 @@ def plot_field_evolution(
     save_path = os.path.join(output_dir, save_name)
     plt.tight_layout()
     _save_and_close(fig, save_path, "演化曲线")
-
+    
 
 def plot_Fs_three_scenarios_evolution(
     results_dict: Dict[str, pd.DataFrame],
@@ -349,14 +368,13 @@ def plot_Fs_three_scenarios_evolution(
 ):
     """
     绘制3个施工区场强演化对比图（竖向3行1列）
-    - 综合场强：暖色调 | 三分量场强：冷色调
-    - 字体占比大幅提升 | 每个子图均显示图例
-    - 三分量场强超强平滑处理 | X轴自适应 + 综合场强阴影
+    - 综合场强实线，三分量不同线型区分
+    - 全图字体整体放大加粗，适配论文大图排版
     """
     set_paper_style()
 
-    # 3行1列 | 共享Y轴 | X轴独立自适应 | 宽高更舒展
-    fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=False, sharey=True)
+    # 画布略微放大，适配超大字体
+    fig, axes = plt.subplots(3, 1, figsize=(15, 15), sharex=False, sharey=True)
 
     scenario_map = {
         "work_zone_1": "施工区1",
@@ -378,40 +396,44 @@ def plot_Fs_three_scenarios_evolution(
         df = results_dict[scn]
         x = df["距离 (m)"]
 
-        # 核心：超强高斯平滑（sigma=6.0），三分量曲线极致顺滑
+        # 超强高斯平滑
         s_geo_smooth  = gaussian_filter1d(df["s_geo_norm"],  sigma=sigma, mode="nearest")
         s_sign_smooth = gaussian_filter1d(df["s_sign_norm"], sigma=sigma, mode="nearest")
         s_veh_smooth  = gaussian_filter1d(df["s_veh_norm"],  sigma=sigma, mode="nearest")
         f_s_smooth    = df["F_S"]
 
-        # 冷色调三分量曲线（超强平滑后）
-        ax.plot(x, s_geo_smooth,  color=colors["s_geo"],  linewidth=2.0, label="道路几何", alpha=1.0)
-        ax.plot(x, s_sign_smooth, color=colors["s_sign"], linewidth=2.0, label="道路设施", alpha=1.0)
-        ax.plot(x, s_veh_smooth,  color=colors["s_veh"],  linewidth=2.0, label="车辆交互", alpha=1.0)
+        # 线型区分：综合实线，其余各异
+        ax.plot(x, s_geo_smooth,  color=colors["s_geo"],  linewidth=2.0, 
+                label="道路几何", alpha=1.0, linestyle='--')
+        ax.plot(x, s_sign_smooth, color=colors["s_sign"], linewidth=2.0, 
+                label="道路设施", alpha=1.0, linestyle='-.')
+        ax.plot(x, s_veh_smooth,  color=colors["s_veh"],  linewidth=2.0, 
+                label="车辆交互", alpha=1.0, linestyle=':')
+        ax.plot(x, f_s_smooth, color=colors["F_S"], linewidth=2.5, 
+                label="综合场强", linestyle='-')
 
-        # 暖色调综合场强曲线 + 同色系透明阴影
-        ax.plot(x, f_s_smooth, color=colors["F_S"], linewidth=2.5, label="综合场强")
+        # 综合场强阴影
         ax.fill_between(x, 0, f_s_smooth, color=colors["F_S"], alpha=0.18)
 
-        # 超大字体设置
-        ax.set_title(scenario_map[scn], fontsize=20, weight='bold', pad=20)
-        ax.tick_params(axis='both', labelsize=16, width=1.2)
+        # ========== 全部字体放大加粗 ==========
+        ax.set_title(scenario_map[scn], fontsize=22, weight='bold', pad=22)
+        ax.tick_params(axis='both', labelsize=20, width=1.2)
         ax.set_ylim(0, 1.02)
         ax.grid(True, linestyle='--', alpha=0.3)
         
-        # 每个子图独立图例（超大字体）
-        ax.legend(loc="upper right", fontsize=15, prop={'weight':'bold'}, framealpha=0.9)
+        # 图例字体加大
+        ax.legend(loc="upper left", prop={'weight':'bold', 'size': 18}, framealpha=0.9, handlelength=3)
 
-    # 坐标轴标签超大字体
-    axes[0].set_ylabel("归一化场强", fontsize=18, weight='bold')
-    axes[1].set_ylabel("归一化场强", fontsize=18, weight='bold')
-    axes[2].set_ylabel("归一化场强", fontsize=18, weight='bold')
-    axes[2].set_xlabel("距离 (m)", fontsize=18, weight='bold')
+    # 坐标轴标签字体放大
+    axes[0].set_ylabel("归一化场强", fontsize=21, weight='bold')
+    axes[1].set_ylabel("归一化场强", fontsize=21, weight='bold')
+    axes[2].set_ylabel("归一化场强", fontsize=21, weight='bold')
+    axes[2].set_xlabel("距离 (m)", fontsize=21, weight='bold')
 
     plt.tight_layout()
     save_path = os.path.join(output_dir, save_name)
     _save_and_close(fig, save_path, "三场景场强演化曲线")
-
+    
 
 def plot_Fs_distribution(df: pd.DataFrame, scenario_name: str, output_dir: str):
     """
@@ -747,6 +769,9 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
     levels = ['低风险', '中风险', '高风险']
     lc     = cfg['vis']['risk_level_colors']
 
+    # 匹配上方柱状图的填充样式：不同方向斜线 + 白底彩边
+    hatch_patterns = ['///', '||', '\\\\\\']  # 低/中/高 对应三种斜线
+
     pcts = {g: [] for g in groups}
     for g in groups:
         sub   = all_windows[all_windows['group'] == g]
@@ -758,14 +783,21 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
     fig, ax = plt.subplots(figsize=(7, 5))
     bottoms = np.zeros(len(groups))
 
-    # 🔴 调整1：柱子进一步收窄（0.55，更紧凑不拥挤）
+    # 柱子宽度保持
     bar_width = 0.55
 
     for idx, lvl in enumerate(levels):
         vals = [pcts[g][idx] for g in groups]
-        bars = ax.bar(x, vals, width=bar_width, bottom=bottoms, color=lc[lvl], label=lvl,
-                      alpha=0.85, edgecolor='white', linewidth=0.5)
-        # 🔴 调整2：百分比文字改为黑色（清晰可见），保留大字体
+        # ===================== 核心修改：统一为白底彩边+斜线填充 =====================
+        bars = ax.bar(x, vals, width=bar_width, bottom=bottoms,
+                      color='white',                # 白底
+                      edgecolor=lc[lvl],            # 彩色边框
+                      linewidth=1.5,                # 边框加粗
+                      hatch=hatch_patterns[idx],    # 区分斜线填充
+                      label=lvl,
+                      alpha=1)
+        # ==========================================================================
+        # 百分比文字：黑色加粗，保持大字体
         for rect, v in zip(bars, vals):
             if v > 3:
                 ax.text(rect.get_x() + rect.get_width() / 2,
@@ -774,22 +806,21 @@ def plot_stacked_bar_risk(all_windows: pd.DataFrame, cfg: dict, fig_dir: str) ->
                         fontsize=14, color='black', fontweight='bold')
         bottoms += np.array(vals)
 
-    # 字体设置（保留之前放大的效果）
+    # ===================== 字体统一放大加粗 =====================
     ax.set_xticks(x)
-    ax.set_xticklabels(groups, fontsize=13)
-    ax.set_ylabel('占比 (%)', fontsize=14)
-    ax.tick_params(axis='y', labelsize=12)
+    ax.set_xticklabels(groups, fontsize=15, weight='bold')  # X轴标签放大
+    ax.set_ylabel('占比 (%)', fontsize=16, weight='bold')    # Y轴标签放大
+    ax.tick_params(axis='y', labelsize=14, width=1.2)        # Y刻度放大
     ax.set_ylim(0, 105)
-    # ax.set_title('图4.10  三组驾驶人风险等级分布堆叠柱状图', fontsize=18, fontweight='bold')
     
-    # 🔴 调整3：图例移到图表外部右侧，完全不遮挡数据
-    ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=13)
+    # 图例字体放大加粗
+    ax.legend(loc='upper left', bbox_to_anchor=(1, 1),
+              prop={'weight':'bold', 'size':14}, framealpha=0.9)
     
     ax.grid(axis='y', linestyle='--', alpha=GRID_ALPHA)
     _apply_spine(ax)
     plt.tight_layout()
     _savefig(fig, os.path.join(fig_dir, 'risk_eval_stacked_bar.png'), cfg['vis']['dpi'])
-
 
 # 典型驾驶人时序曲线（底部横向图例+双图Y轴固定 最终版）
 def plot_timeseries_typical(all_windows: pd.DataFrame,

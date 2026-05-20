@@ -1,6 +1,8 @@
-# /root/autodl-tmp/DynamicCapRisk/src/3_prediction/evaluator.py
+# src/3_prediction/evaluator.py
 
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import sys
 import pickle
 import argparse
@@ -264,7 +266,7 @@ def build_report(
         "【一】风险度预测（回归）",
         f"  R²             = {r_r2:.4f}",
         f"  MAE            = {r_mae_:.4f}",
-        f"  RMSE           = r_rmse_:.4f",
+        f"  RMSE           = {r_rmse_:.4f}",
         f"  高风险召回率   = {hr_recall*100:.1f}%  （阈值 R>{high_thresh}）",
         f"  高风险精确率   = {hr_prec*100:.1f}%",
         f"  高风险 F1      = {hr_f1_val:.4f}", "",
@@ -330,7 +332,7 @@ def evaluate(cfg: dict) -> None:
         model = build_baseline_model(cfg)
         print(f"✅ 构建基线模型: {model_type.upper()}")
 
-    model.load_state_dict(torch.load(ckpt_path, map_location=device))
+    model.load_state_dict(torch.load(ckpt_path, map_location=device), strict=False)
     model = model.to(device)
     print(f"  模型加载成功！")
 
@@ -383,9 +385,11 @@ def evaluate(cfg: dict) -> None:
                 df_log = pd.read_csv(train_log_path)
                 train_loss_real = df_log["train_total"].values
                 val_loss_real = df_log["val_total"].values
-                early_stop_epoch_real = len(df_log) - 1
-                epochs_real = len(df_log)
-                plot_training_loss(train_loss_real, val_loss_real, early_stop_epoch_real, loss_path, epochs_real)
+                # 从CSV读取：验证集损失最小的最优轮次（核心）
+                best_epoch = np.argmin(val_loss_real)
+                total_epochs = len(df_log)
+                # 调用绘图函数，仅传入最优轮次
+                plot_training_loss(train_loss_real, val_loss_real, best_epoch, loss_path, total_epochs)
                 print(f"✅ 训练损失曲线绘制完成")
             except Exception as e:
                 print(f"⚠ 损失曲线绘制失败: {e}")

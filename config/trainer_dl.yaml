@@ -1,4 +1,4 @@
-# /root/autodl-tmp/DynamicCapRisk/config/trainer_dl.yaml
+# config/trainer_dl.yaml
 # 风险预测模型配置（已移除能力预测分支）
 # 切换模型只需修改 model.model_type：
 #   mtrp      → 多模态Transformer风险预测模型（默认）
@@ -23,7 +23,7 @@ paths:
 # -------------------------- 模型配置 --------------------------
 model:
   model_type: "mtrp"
-  ablation: "no_cross_attn"
+  ablation: "none"
   seq_len:    5
   input_dim:  18
   n_classes:  3

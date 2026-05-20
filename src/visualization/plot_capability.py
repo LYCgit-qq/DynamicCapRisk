@@ -212,15 +212,26 @@ def plot_radar_visualization(
     if not group_order:
         group_order = centers.index.tolist()
 
+    # 颜色映射保持不变
     color_map = {"高能力组": "#2C5F8A", "中能力组": "#4CAF82", "低能力组": "#E07B39"}
+    
+    # 新增：不同分组使用不同线形
+    linestyle_map = {
+        "高能力组": "-",    # 实线
+        "中能力组": "--",   # 虚线
+        "低能力组": "-."    # 点划线
+    }
 
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
 
     for group in group_order:
         values = centers.loc[group, cols].values.tolist() + [centers.loc[group, cols].values[0]]
         color  = color_map.get(group, PRIMARY_COLOR)
-        ax.plot(angles, values, color=color, linestyle="-",
-                linewidth=LINE_WIDTH, marker="o", markersize=MARKER_SIZE, label=group)
+        linestyle = linestyle_map.get(group, "-")
+        marker_map = {"高能力组": "o", "中能力组": "s", "低能力组": "^"}
+        marker = marker_map.get(group, "o")
+        ax.plot(angles, values, color=color, linestyle=linestyle,
+                linewidth=LINE_WIDTH, marker=marker, markersize=MARKER_SIZE, label=group)
         ax.fill(angles, values, color=color, alpha=0.10)
 
     ax.set_thetagrids(np.degrees(angles[:-1]), labels=axis_labels, fontsize=17)
@@ -243,7 +254,8 @@ def plot_radar_visualization(
 
     ax.plot(angles, [0.0] * (n_axis + 1),
             color="#E53935", linestyle=":", linewidth=1.4, alpha=0.75, label="样本均值（0）")
-    ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15),
+    
+    ax.legend(loc="upper right", bbox_to_anchor=(1.35, 0.95),
               framealpha=0.9, fontsize=14, title="能力分组", title_fontsize=14)
 
     output_dir = Path(output_dir)
@@ -252,7 +264,6 @@ def plot_radar_visualization(
     fig.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     logging.info("雷达图已保存至: %s", save_path)
-
 
 def plot_abc_distribution(abc_df: pd.DataFrame, output_dir: Path):
     """
@@ -612,11 +623,15 @@ def plot_grouped_boxplot(fluctuation_sample, config, save_path=None):
             print("  结论：三组间差异极显著（p < 0.001）")
     # ==========================================================================
 
-    # 均值三角标注（温和红色）
+    # 均值三角标注（温和红色）+ 添加图例
     for i, grade in enumerate(ordered_grades):
         mean_v = np.mean(grade_flucts[grade])
         ax.scatter(i, mean_v, color="indianred", marker="^",
-                   s=60, zorder=10, linewidths=0)
+                s=60, zorder=10, linewidths=0,
+                label="均值" if i == 0 else "")
+
+    # 合并图例：组别 + 均值
+    ax.legend(loc="lower left", fontsize=12, frameon=True, fancybox=True)
 
     ax.set_xlabel("")
     ax.set_ylabel("驾驶能力波动量 Afl", fontsize=16)
@@ -819,12 +834,16 @@ def visualize_Ad_results(all_dynamic_cap, dynamic_cap_sample, exp_group_df, conf
 
     fig, ax = plt.subplots(figsize=(11, 5))
     group_order = ["高能力组", "中能力组", "低能力组"]
+    GROUP_MARKERS = {"高能力组": "o", "中能力组": "s", "低能力组": "^"}
+    GROUP_SIZES = {"高能力组": 80, "中能力组": 80, "低能力组": 100}
     for group in group_order:
         sub = subject_stats[subject_stats["能力等级"] == group]
         if not sub.empty:
             ax.scatter(sub["被试ID"], sub["Ad_mean"],
                        color=GROUP_PALETTE.get(group, PRIMARY_COLOR),
-                       label=group, s=75, alpha=0.85, edgecolors="white", linewidths=0.4)
+                       marker=GROUP_MARKERS.get(group, "o"),
+                       s=GROUP_SIZES.get(group, 75),  # 按分组设置大小
+                       label=group, alpha=0.85, edgecolors="white", linewidths=0.4)
 
     ax.set_xlabel("驾驶人编号（被试 ID）")
     ax.set_ylabel("动态驾驶能力均值 Ad")

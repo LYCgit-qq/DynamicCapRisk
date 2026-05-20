@@ -1,0 +1,22 @@
+# ================= 路径配置 =================
+paths:
+  # 实验 runs 根目录
+  runs_dir: "D:\\Local\\DynamicCapRisk\\output\\3_prediction\\runs"
+  # 结果汇总输出目录
+  output_root: "D:\\Local\\DynamicCapRisk\\output\\3_prediction\\results_summary"
+  # 配置文件自身路径 (用于脚本定位)
+  config_path: "D:\\Local\\DynamicCapRisk\\config\\summarize_results.yaml"
+
+# ================= 排序策略配置 =================
+sorting:
+  # --- 表5.8 模型对比排序策略 ---
+  # 可选字段: high_risk_recall, high_risk_f1, risk_reg_R2, cls_accuracy 等
+  model_comparison:
+    sort_by: "high_risk_f1"   # 按什么指标选最优
+    ascending: false               # false = 降序 (越高越好), true = 升序 (越低越好)
+
+  # --- 表5.9 消融实验排序策略 ---
+  # 可选字段: risk_reg_MAE, cls_macro_f1 等
+  ablation_study:
+    sort_by: "high_risk_f1"
+    ascending: false

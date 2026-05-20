@@ -1,4 +1,4 @@
-# /root/autodl-tmp/DynamicCapRisk/src/3_prediction/dataset.py
+# src/3_prediction/dataset.py
 # MT-RP 联合预测模型数据集构建模块
 
 import os
